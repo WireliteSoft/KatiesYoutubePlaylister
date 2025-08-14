@@ -143,21 +143,31 @@ function App() {
     }
   };
 
-  const handleDeletePlaylist = (id: string) => {
-      setPlaylists(prev => {
-        const next = prev.filter(p => p.id !== id);
-    // persist immediately so the deletion is reflected in D1 now
-    saveRemote(videos, next);
-    mirrorToLocalStorage(videos, next);
-    return next;
-  });
-    if (currentPlaylist?.id === id) {
-      setIsPlayerOpen(false);
-      setCurrentPlaylist(null);
-      setCurrentVideo(null);
-      setCurrentIndex(null);
+const handleDeletePlaylist = async (id: string) => {
+  try {
+    const res = await fetch(`/api/playlists/${id}`, { method: 'DELETE' });
+    if (!res.ok) {
+      const msg = await res.text();
+      console.error('[Delete playlist] server error:', msg);
+      alert('Failed to delete playlist on server.');
+      return;
     }
-  };
+  } catch (e) {
+    console.error('[Delete playlist] network error:', e);
+    alert('Failed to reach server.');
+    return;
+  }
+
+  setPlaylists(prev => prev.filter(p => p.id !== id));
+
+  if (currentPlaylist?.id === id) {
+    setIsPlayerOpen(false);
+    setCurrentPlaylist(null);
+    setCurrentVideo(null);
+    setCurrentIndex(null);
+  }
+};
+
 
   const handleNext = () => {
     if (currentPlaylist != null && currentIndex != null) {
