@@ -1,4 +1,3 @@
-// src/components/PlaylistEditor.tsx
 import React, { useState, useCallback } from 'react';
 import { X, GripVertical } from 'lucide-react';
 import type { Playlist, Video } from '../types';
@@ -32,7 +31,7 @@ export default function PlaylistEditor({ playlist, onClose, onSave }: PlaylistEd
 
   const handleDragOver = useCallback(
     (index: number) => (e: React.DragEvent) => {
-      e.preventDefault(); // allow drop
+      e.preventDefault();
       e.dataTransfer.dropEffect = 'move';
       setOverIndex(index);
     },
