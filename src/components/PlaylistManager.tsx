@@ -124,7 +124,7 @@ export const PlaylistManager: React.FC<PlaylistManagerProps> = ({
                   ))}
                   {playlist.videos.length > 5 && (
                     <div className="w-12 h-12 bg-gray-700 rounded flex items-center justify-center text-xs text-white">
-                      +{playlist.videos - 5}
+                      +{playlist.videos.length - 5}
                     </div>
                   )}
                 </div>
