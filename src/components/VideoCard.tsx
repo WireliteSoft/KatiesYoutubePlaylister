@@ -2,70 +2,80 @@ import React from 'react';
 import { Play, Plus, Trash2 } from 'lucide-react';
 import { Video } from '../types';
 
-interface VideoCardProps {
+interface Props {
   video: Video;
-  onPlay: (video: Video) => void;
-  onAddToPlaylist: (video: Video) => void;
-  onDelete: (video: Video) => void;
+  onPlay: (v: Video) => void;
+  onAddToPlaylist: () => void;
+  onDelete: (v: Video) => void;
   showDelete?: boolean;
+  dense?: boolean; // compact layout for grid tiles
 }
 
-export const VideoCard: React.FC<VideoCardProps> = ({
+export const VideoCard: React.FC<Props> = ({
   video,
   onPlay,
   onAddToPlaylist,
   onDelete,
   showDelete = false,
+  dense = false,
 }) => {
+  const titleClass = dense ? 'text-xs line-clamp-2' : 'text-sm sm:text-base line-clamp-2';
+  const channelClass = dense ? 'hidden sm:block truncate' : 'truncate';
+
   return (
-    <div className="bg-gray-800 rounded-lg overflow-hidden shadow-lg hover:shadow-xl transition-all duration-300">
-      <div className="relative group">
-        <img
-          src={video.thumbnail}
-          alt={video.title}
-          className="w-full h-48 object-cover"
-          loading="lazy"
-        />
-        {/* Hover overlay with Play button */}
-        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/50 transition-colors flex items-center justify-center">
+    <div className="group bg-gray-800 rounded-xl overflow-hidden shadow-sm ring-1 ring-gray-700/50">
+      {/* thumbnail (square on dense, 16:9 otherwise) */}
+      <div className="relative w-full">
+        <div className="relative w-full" style={{ paddingTop: dense ? '100%' : '56.25%' }}>
+          {video.thumbnail && (
+            <img
+              src={video.thumbnail}
+              alt={video.title}
+              className="absolute inset-0 w-full h-full object-cover"
+              loading="lazy"
+              decoding="async"
+            />
+          )}
           <button
             type="button"
-            onClick={(e) => { e.stopPropagation(); onPlay(video); }}
-            className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-red-600 hover:bg-red-700 text-white p-3 rounded-full"
-            title="Play"
+            onClick={() => onPlay(video)}
+            className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40"
+            aria-label="Play"
           >
-            <Play className="w-6 h-6" />
+            <Play className="w-8 h-8 text-white" />
           </button>
         </div>
       </div>
 
-      <div className="p-4">
-        <h3 className="text-white font-semibold line-clamp-2">{video.title}</h3>
-        <p className="text-gray-400 text-sm mt-1 line-clamp-1">{video.channelTitle}</p>
+      <div className="p-3 sm:p-4">
+        <h3 className={`text-white font-semibold ${titleClass}`}>{video.title}</h3>
+        <div className="mt-1 text-xs text-gray-400 leading-5">
+          <span className={channelClass}>{video.channelTitle}</span>
+          {video.duration && <span className="block sm:inline">{video.duration}</span>}
+        </div>
 
-        <div className="mt-4 flex items-center justify-between">
-          <span className="text-gray-300 text-sm">{video.duration}</span>
-          <div className="flex items-center gap-2">
+        <div className="mt-3 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onAddToPlaylist}
+            className="inline-flex items-center justify-center rounded-md bg-gray-700 hover:bg-gray-600 text-gray-100 px-2.5 py-1.5 text-xs sm:text-sm transition-colors"
+            aria-label="Add to selection"
+            title="Add to selection"
+          >
+            <Plus className="w-4 h-4" />
+          </button>
+
+          {showDelete && (
             <button
               type="button"
-              onClick={(e) => { e.stopPropagation(); onAddToPlaylist(video); }}
-              className="bg-gray-700 hover:bg-gray-600 text-white p-2 rounded-lg transition-colors"
-              title="Add to playlist"
+              onClick={() => onDelete(video)}
+              className="inline-flex items-center justify-center rounded-md bg-red-600 hover:bg-red-700 text-white px-2.5 py-1.5 text-xs sm:text-sm transition-colors"
+              aria-label="Delete"
+              title="Delete"
             >
-              <Plus className="w-4 h-4" />
+              <Trash2 className="w-4 h-4" />
             </button>
-
-            {showDelete && (
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); onDelete(video); }}
-                className="bg-red-600 hover:bg-red-700 text-white p-2 rounded-lg transition-colors"
-                title="Delete video"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
-            )}
-          </div>
+          )}
         </div>
       </div>
     </div>
