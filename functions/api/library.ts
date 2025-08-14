@@ -12,19 +12,24 @@ const headers = {
 const resp = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers });
 
-// IMPORTANT: single-line DDL strings + prepare().run()
-async function ensure(db: D1Database) {
+// Single-line DDL (only used if tables are missing)
+async function createTables(db: D1Database) {
   await db.prepare(
     'CREATE TABLE IF NOT EXISTS videos (id TEXT PRIMARY KEY, title TEXT, thumbnail TEXT, duration TEXT, channelTitle TEXT, publishedAt TEXT)'
   ).run();
-
   await db.prepare(
     'CREATE TABLE IF NOT EXISTS playlists (id TEXT PRIMARY KEY, name TEXT, description TEXT, createdAt TEXT, thumbnail TEXT)'
   ).run();
-
   await db.prepare(
     'CREATE TABLE IF NOT EXISTS playlist_videos (playlist_id TEXT, video_id TEXT, position INTEGER, PRIMARY KEY (playlist_id, position))'
   ).run();
+}
+
+async function haveTables(db: D1Database) {
+  const rs = await db.prepare(
+    'SELECT name FROM sqlite_master WHERE type="table" AND name IN ("videos","playlists","playlist_videos")'
+  ).all();
+  return (rs.results ?? []).length === 3;
 }
 
 export const onRequestOptions: PagesFunction<Env> = async () =>
@@ -34,15 +39,26 @@ export const onRequestGet: PagesFunction<Env> = async ({ env }) => {
   try {
     if (!env.DB) return resp({ error: 'Missing D1 binding "DB"' }, 500);
     const db = env.DB;
-    await ensure(db);
 
-    const vids = await db.prepare(
-      'SELECT id, title, thumbnail, duration, channelTitle, publishedAt FROM videos'
-    ).all().catch(() => ({ results: [] as any[] }));
-
-    const pls = await db.prepare(
-      'SELECT id, name, description, createdAt, thumbnail FROM playlists'
-    ).all().catch(() => ({ results: [] as any[] }));
+    // Try selects first (tables already exist per your health output)
+    let vids, pls;
+    try {
+      vids = await db.prepare(
+        'SELECT id, title, thumbnail, duration, channelTitle, publishedAt FROM videos'
+      ).all();
+      pls = await db.prepare(
+        'SELECT id, name, description, createdAt, thumbnail FROM playlists'
+      ).all();
+    } catch (e) {
+      // If tables are actually missing, create them once
+      await createTables(db);
+      vids = await db.prepare(
+        'SELECT id, title, thumbnail, duration, channelTitle, publishedAt FROM videos'
+      ).all();
+      pls = await db.prepare(
+        'SELECT id, name, description, createdAt, thumbnail FROM playlists'
+      ).all();
+    }
 
     const playlists: any[] = [];
     for (const p of (pls.results as any[]) ?? []) {
@@ -50,11 +66,11 @@ export const onRequestGet: PagesFunction<Env> = async ({ env }) => {
         'SELECT pv.video_id, pv.position, v.title, v.thumbnail, v.duration, v.channelTitle, v.publishedAt ' +
         'FROM playlist_videos pv JOIN videos v ON v.id = pv.video_id ' +
         'WHERE pv.playlist_id = ? ORDER BY pv.position ASC'
-      ).bind(p.id).all().catch(() => ({ results: [] as any[] }));
+      ).bind(p.id).all();
 
       playlists.push({
         ...p,
-        videos: (pv.results as any[]).map(r => ({
+        videos: ((pv.results as any[]) ?? []).map(r => ({
           id: r.video_id,
           title: r.title,
           thumbnail: r.thumbnail,
@@ -80,7 +96,9 @@ export const onRequestPut: PagesFunction<Env> = async ({ request, env }) => {
   try {
     if (!env.DB) return resp({ error: 'Missing D1 binding "DB"' }, 500);
     const db = env.DB;
-    await ensure(db);
+
+    // Create tables only if actually missing
+    if (!(await haveTables(db))) await createTables(db);
 
     let body: any;
     try { body = await request.json(); }
@@ -90,7 +108,7 @@ export const onRequestPut: PagesFunction<Env> = async ({ request, env }) => {
       return resp({ error: 'Invalid payload; expected {videos:[], playlists:[]}' }, 400);
     }
 
-    // dedupe videos by id to avoid UNIQUE failures
+    // de-dupe videos by id
     const uniq: Record<string, any> = {};
     for (const v of body.videos) if (v?.id && !uniq[v.id]) uniq[v.id] = v;
     const videosArr = Object.values(uniq);
