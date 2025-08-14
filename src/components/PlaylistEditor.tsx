@@ -4,6 +4,20 @@ import { X, GripVertical, Trash2 } from 'lucide-react';
 import { savePlaylistMapping } from '../utils/snapshot';
 import type { Playlist, Video } from '../types';
 
+const handleRemove = useCallback((videoId: string) => {
+  setItems(prev => {
+    const next = prev.filter(v => v.id !== videoId);
+
+    // 1) Persist to DB immediately (replaces this playlist’s mapping)
+    savePlaylistMapping(playlist.id, next.map(v => v.id)).catch(() => {});
+
+    // 2) Update parent state (keeps UI + player in sync)
+    onSave(next);
+
+    return next;
+  });
+}, [onSave, playlist.id]);
+
 interface PlaylistEditorProps {
   playlist: Playlist;
   onClose: () => void;
