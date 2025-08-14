@@ -1,3 +1,4 @@
+// functions/api/library.ts
 // GET  /api/library  -> { videos, playlists }
 // PUT  /api/library  -> replace entire library { videos, playlists }
 
@@ -11,29 +12,43 @@ const headers = {
 const resp = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers });
 
+// Use prepare().run() for DDL to avoid "incomplete input" on exec().
 async function ensure(db: D1Database) {
-  // Create tables one-by-one (safer than multi-stmt exec)
-  await db.exec(`CREATE TABLE IF NOT EXISTS videos (
-    id TEXT PRIMARY KEY,
-    title TEXT,
-    thumbnail TEXT,
-    duration TEXT,
-    channelTitle TEXT,
-    publishedAt TEXT
-  );`);
-  await db.exec(`CREATE TABLE IF NOT EXISTS playlists (
-    id TEXT PRIMARY KEY,
-    name TEXT,
-    description TEXT,
-    createdAt TEXT,
-    thumbnail TEXT
-  );`);
-  await db.exec(`CREATE TABLE IF NOT EXISTS playlist_videos (
-    playlist_id TEXT,
-    video_id TEXT,
-    position INTEGER,
-    PRIMARY KEY (playlist_id, position)
-  );`);
+  await db
+    .prepare(
+      `CREATE TABLE IF NOT EXISTS videos (
+        id TEXT PRIMARY KEY,
+        title TEXT,
+        thumbnail TEXT,
+        duration TEXT,
+        channelTitle TEXT,
+        publishedAt TEXT
+      )`
+    )
+    .run();
+
+  await db
+    .prepare(
+      `CREATE TABLE IF NOT EXISTS playlists (
+        id TEXT PRIMARY KEY,
+        name TEXT,
+        description TEXT,
+        createdAt TEXT,
+        thumbnail TEXT
+      )`
+    )
+    .run();
+
+  await db
+    .prepare(
+      `CREATE TABLE IF NOT EXISTS playlist_videos (
+        playlist_id TEXT,
+        video_id TEXT,
+        position INTEGER,
+        PRIMARY KEY (playlist_id, position)
+      )`
+    )
+    .run();
 }
 
 export const onRequestOptions: PagesFunction<Env> = async () =>
@@ -45,7 +60,6 @@ export const onRequestGet: PagesFunction<Env> = async ({ env }) => {
     const db = env.DB;
     await ensure(db);
 
-    // SELECTs wrapped to never throw on fresh DBs
     const vids = await db
       .prepare(
         `SELECT id, title, thumbnail, duration, channelTitle, publishedAt FROM videos`
@@ -118,14 +132,20 @@ export const onRequestPut: PagesFunction<Env> = async ({ request, env }) => {
       );
     }
 
-    // Wipe then insert using batch (fast, robust)
+    // Dedupe videos by id to avoid UNIQUE constraint failures
+    const uniq: Record<string, any> = {};
+    for (const v of body.videos) {
+      if (v?.id && !uniq[v.id]) uniq[v.id] = v;
+    }
+    const videosArr = Object.values(uniq);
+
+    // wipe & write in a batch
     const stmts: D1PreparedStatement[] = [];
     stmts.push(db.prepare(`DELETE FROM playlist_videos`));
     stmts.push(db.prepare(`DELETE FROM playlists`));
     stmts.push(db.prepare(`DELETE FROM videos`));
 
-    for (const v of body.videos) {
-      if (!v?.id) continue;
+    for (const v of videosArr) {
       stmts.push(
         db
           .prepare(
@@ -186,3 +206,4 @@ export const onRequestPut: PagesFunction<Env> = async ({ request, env }) => {
     return resp({ error: String(e?.message || e) }, 500);
   }
 };
+
