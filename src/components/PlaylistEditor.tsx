@@ -1,4 +1,3 @@
-// src/components/PlaylistEditor.tsx
 import React, { useState, useCallback, useEffect } from 'react';
 import { X, GripVertical, Trash2, Play } from 'lucide-react';
 import type { Playlist, Video } from '../types';
@@ -7,7 +6,7 @@ type Props = {
   playlist: Playlist;
   isOpen: boolean;
   onClose: () => void;
-  // parent persists: onReorderPlaylist(id, newOrder)
+  // parent: onReorderPlaylist(id, newOrder)
   onSave: (id: string, newOrder: Video[]) => void;
   onPlayPreview?: (v: Video) => void;
 };
@@ -30,7 +29,7 @@ export default function PlaylistEditor({
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [overIndex, setOverIndex] = useState<number | null>(null);
 
-  // keep local when a different playlist opens
+  // Reset local list when a different playlist is opened
   useEffect(() => {
     setItems(playlist.videos ?? []);
     setDragIndex(null);
@@ -77,7 +76,7 @@ export default function PlaylistEditor({
     setOverIndex(null);
   }, []);
 
-  // NEW: delete a song from this playlist (local until Save)
+  // Delete a song from this playlist (local until Save)
   const handleRemove = useCallback((id: string) => {
     setItems(prev => prev.filter(v => v.id !== id));
   }, []);
@@ -96,7 +95,7 @@ export default function PlaylistEditor({
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800">
           <div>
             <h3 className="text-white font-semibold">Edit Order — {playlist.name}</h3>
-            <p className="text-xs text-gray-400">Drag to reorder. Use the X to remove. Click Save to apply.</p>
+            <p className="text-xs text-gray-400">Drag to reorder. Click the X to remove. Save to apply.</p>
           </div>
           <button
             type="button"
@@ -149,15 +148,16 @@ export default function PlaylistEditor({
                 )}
               </div>
 
-              {/* text */}
+              {/* text (no 'Unknown' fallback) */}
               <div className="min-w-0 flex-1">
                 <div className="text-white text-sm font-medium truncate">{v.title}</div>
                 <div className="text-gray-400 text-xs truncate">
-                  {v.channelTitle || 'Unknown'} {v.duration ? `• ${v.duration}` : ''}
+                  {v.channelTitle ? v.channelTitle : ''}
+                  {v.duration ? (v.channelTitle ? ` • ${v.duration}` : v.duration) : ''}
                 </div>
               </div>
 
-              {/* NEW delete button (right side) */}
+              {/* delete button at right */}
               <button
                 type="button"
                 onClick={() => handleRemove(v.id)}
