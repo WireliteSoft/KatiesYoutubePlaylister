@@ -8,10 +8,10 @@ import { PlaylistManager } from './components/PlaylistManager';
 import { VideoPlayer } from './components/VideoPlayer';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import {
-  saveSnapshotOPFS,
-  loadSnapshotOPFS,
+  loadRemote,
+  saveRemote,
   mirrorToLocalStorage,
-  requestPersistentStorage,
+  readMirrorFromLocalStorage,
 } from './utils/snapshot';
 
 function App() {
@@ -23,37 +23,26 @@ function App() {
   const [currentIndex, setCurrentIndex] = useState<number | null>(null);
   const [isPlayerOpen, setIsPlayerOpen] = useState(false);
 
-  // Auto-restore on cold start if localStorage is empty but an OPFS/mirror backup exists
+  // On load: try REMOTE (D1) first, then local mirror fallback
   React.useEffect(() => {
     (async () => {
       try {
-        await requestPersistentStorage();
-
-        const hasLocal =
-          (Array.isArray(videos) && videos.length > 0) ||
-          (Array.isArray(playlists) && playlists.length > 0);
-        if (hasLocal) return;
-
-        const snap = await loadSnapshotOPFS();
-        if (snap && Array.isArray(snap.videos) && Array.isArray(snap.playlists)) {
-          setVideos(snap.videos);
-          setPlaylists(snap.playlists);
+        const remote = await loadRemote();
+        if (remote && (remote.videos.length || remote.playlists.length)) {
+          setVideos(remote.videos);
+          setPlaylists(remote.playlists);
           return;
         }
-
-        const mirrorRaw = localStorage.getItem('__yt_collection_backup__');
-        if (mirrorRaw) {
-          const data = JSON.parse(mirrorRaw);
-          if (Array.isArray(data?.videos) && Array.isArray(data?.playlists)) {
-            setVideos(data.videos);
-            setPlaylists(data.playlists);
-          }
+        const mirror = readMirrorFromLocalStorage();
+        if (mirror) {
+          setVideos(mirror.videos);
+          setPlaylists(mirror.playlists);
         }
       } catch (e) {
-        console.warn('[snapshot] restore failed:', e);
+        console.warn('[restore] failed:', e);
       }
     })();
-    // intentionally no deps; runs once on cold start
+    // run once
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -184,14 +173,14 @@ function App() {
     }
   };
 
-  // Auto-snapshot whenever videos/playlists change (debounced)
+  // On change: push REMOTE (D1) + mirror locally (debounced)
   React.useEffect(() => {
     const t = setTimeout(() => {
       try {
-        saveSnapshotOPFS(videos, playlists);
-        mirrorToLocalStorage(videos, playlists);
+        saveRemote(videos, playlists);             // shared across devices
+        mirrorToLocalStorage(videos, playlists);   // local safety copy
       } catch (e) {
-        console.warn('[snapshot] save failed:', e);
+        console.warn('[save] failed:', e);
       }
     }, 300);
     return () => clearTimeout(t);
@@ -207,7 +196,7 @@ function App() {
             <h1 className="text-2xl font-bold text-white">YouTube Collection Manager</h1>
           </div>
         </div>
-        </header>
+      </header>
 
       <div className="max-w-7xl mx-auto px-4 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
