@@ -1,9 +1,8 @@
 // /functions/api/library.ts
-// Shared playlists/videos API backed by Cloudflare D1.
 // GET  /api/library  -> { videos, playlists }
-// PUT  /api/library  -> replace with posted { videos, playlists }
+// PUT  /api/library  -> replace entire library { videos, playlists }
 
-type Env = { DB: D1Database };
+type Env = { DB?: D1Database };
 
 const headers = {
   'content-type': 'application/json',
@@ -11,145 +10,152 @@ const headers = {
   'access-control-allow-methods': 'GET,PUT,OPTIONS',
 };
 
+const j = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers });
+
 async function ensureSchema(db: D1Database) {
-  await db.exec(`
-    CREATE TABLE IF NOT EXISTS videos (
-      id TEXT PRIMARY KEY,
-      title TEXT,
-      thumbnail TEXT,
-      duration TEXT,
-      channelTitle TEXT,
-      publishedAt TEXT
-    );
-    CREATE TABLE IF NOT EXISTS playlists (
-      id TEXT PRIMARY KEY,
-      name TEXT,
-      description TEXT,
-      createdAt TEXT,
-      thumbnail TEXT
-    );
-    CREATE TABLE IF NOT EXISTS playlist_videos (
-      playlist_id TEXT,
-      video_id TEXT,
-      position INTEGER,
-      PRIMARY KEY (playlist_id, position)
-    );
-  `);
+  // Run statements one-by-one (some setups choke on multi-stmt .exec)
+  await db.exec(`CREATE TABLE IF NOT EXISTS videos (
+    id TEXT PRIMARY KEY,
+    title TEXT,
+    thumbnail TEXT,
+    duration TEXT,
+    channelTitle TEXT,
+    publishedAt TEXT
+  );`);
+  await db.exec(`CREATE TABLE IF NOT EXISTS playlists (
+    id TEXT PRIMARY KEY,
+    name TEXT,
+    description TEXT,
+    createdAt TEXT,
+    thumbnail TEXT
+  );`);
+  await db.exec(`CREATE TABLE IF NOT EXISTS playlist_videos (
+    playlist_id TEXT,
+    video_id TEXT,
+    position INTEGER,
+    PRIMARY KEY (playlist_id, position)
+  );`);
 }
 
-export const onRequestOptions: PagesFunction<Env> = async () =>
-  new Response(null, { headers });
+export const onRequestOptions: PagesFunction<Env> = async () => new Response(null, { headers });
 
 export const onRequestGet: PagesFunction<Env> = async ({ env }) => {
-  const db = env.DB;
-  await ensureSchema(db);
+  try {
+    if (!env.DB) return j({ error: 'Missing D1 binding "DB"' }, 500);
+    const db = env.DB;
 
-  const vids = await db
-    .prepare(`SELECT id, title, thumbnail, duration, channelTitle, publishedAt FROM videos`)
-    .all();
+    await ensureSchema(db);
 
-  const pls = await db
-    .prepare(`SELECT id, name, description, createdAt, thumbnail FROM playlists`)
-    .all();
-
-  const out: any[] = [];
-  for (const p of (pls.results as any[]) ?? []) {
-    const pv = await db
-      .prepare(
-        `SELECT pv.video_id, pv.position, v.title, v.thumbnail, v.duration, v.channelTitle, v.publishedAt
-         FROM playlist_videos pv JOIN videos v ON v.id = pv.video_id
-         WHERE pv.playlist_id = ? ORDER BY pv.position ASC`
-      )
-      .bind(p.id)
+    const vids = await db
+      .prepare(`SELECT id, title, thumbnail, duration, channelTitle, publishedAt FROM videos`)
       .all();
 
-    out.push({
-      ...p,
-      videos: ((pv.results as any[]) ?? []).map(r => ({
-        id: r.video_id,
-        title: r.title,
-        thumbnail: r.thumbnail,
-        duration: r.duration,
-        channelTitle: r.channelTitle,
-        publishedAt: r.publishedAt,
-      })),
-    });
-  }
+    const pls = await db
+      .prepare(`SELECT id, name, description, createdAt, thumbnail FROM playlists`)
+      .all();
 
-  return new Response(
-    JSON.stringify({
+    const playlists: any[] = [];
+    for (const p of (pls.results as any[]) ?? []) {
+      const pv = await db
+        .prepare(
+          `SELECT pv.video_id, pv.position, v.title, v.thumbnail, v.duration, v.channelTitle, v.publishedAt
+           FROM playlist_videos pv JOIN videos v ON v.id = pv.video_id
+           WHERE pv.playlist_id = ? ORDER BY pv.position ASC`
+        )
+        .bind(p.id)
+        .all();
+
+      playlists.push({
+        ...p,
+        videos: ((pv.results as any[]) ?? []).map((r) => ({
+          id: r.video_id,
+          title: r.title,
+          thumbnail: r.thumbnail,
+          duration: r.duration,
+          channelTitle: r.channelTitle,
+          publishedAt: r.publishedAt,
+        })),
+      });
+    }
+
+    return j({
       version: 1,
       updatedAt: new Date().toISOString(),
       videos: vids.results ?? [],
-      playlists: out,
-    }),
-    { headers }
-  );
+      playlists,
+    });
+  } catch (e: any) {
+    return j({ error: String(e?.message || e) }, 500);
+  }
 };
 
 export const onRequestPut: PagesFunction<Env> = async ({ request, env }) => {
-  const db = env.DB;
-  await ensureSchema(db);
-
-  let body: any;
   try {
-    body = await request.json();
-  } catch {
-    return new Response(JSON.stringify({ error: 'Bad JSON' }), { status: 400, headers });
-  }
-  if (!Array.isArray(body?.videos) || !Array.isArray(body?.playlists)) {
-    return new Response(JSON.stringify({ error: 'Invalid payload' }), { status: 400, headers });
-  }
+    if (!env.DB) return j({ error: 'Missing D1 binding "DB"' }, 500);
+    const db = env.DB;
 
-  // wipe & write
-  await db.exec(`DELETE FROM playlist_videos; DELETE FROM playlists; DELETE FROM videos;`);
+    let body: any;
+    try {
+      body = await request.json();
+    } catch {
+      return j({ error: 'Bad JSON' }, 400);
+    }
+    if (!Array.isArray(body?.videos) || !Array.isArray(body?.playlists)) {
+      return j({ error: 'Invalid payload; expected {videos:[], playlists:[]}' }, 400);
+    }
 
-  for (const v of body.videos) {
-    if (!v?.id) continue;
-    await db
-      .prepare(
-        `INSERT INTO videos (id, title, thumbnail, duration, channelTitle, publishedAt)
-         VALUES (?, ?, ?, ?, ?, ?)`
-      )
-      .bind(
-        v.id,
-        v.title ?? '',
-        v.thumbnail ?? '',
-        v.duration ?? '',
-        v.channelTitle ?? '',
-        v.publishedAt ?? ''
-      )
-      .run();
-  }
+    await ensureSchema(db);
 
-  for (const p of body.playlists) {
-    if (!p?.id) continue;
-    await db
-      .prepare(
-        `INSERT INTO playlists (id, name, description, createdAt, thumbnail)
-         VALUES (?, ?, ?, ?, ?)`
-      )
-      .bind(p.id, p.name ?? '', p.description ?? '', p.createdAt ?? '', p.thumbnail ?? '')
-      .run();
+    // wipe & write
+    await db.exec(`DELETE FROM playlist_videos;`);
+    await db.exec(`DELETE FROM playlists;`);
+    await db.exec(`DELETE FROM videos;`);
 
-    if (Array.isArray(p.videos)) {
-      let pos = 0;
-      for (const vv of p.videos) {
-        const vid = typeof vv === 'string' ? vv : vv?.id;
-        if (!vid) continue;
-        await db
-          .prepare(
-            `INSERT INTO playlist_videos (playlist_id, video_id, position)
-             VALUES (?, ?, ?)`
-          )
-          .bind(p.id, vid, pos++)
-          .run();
+    for (const v of body.videos) {
+      if (!v?.id) continue;
+      await db
+        .prepare(
+          `INSERT INTO videos (id, title, thumbnail, duration, channelTitle, publishedAt)
+           VALUES (?, ?, ?, ?, ?, ?)`
+        )
+        .bind(
+          v.id,
+          v.title ?? '',
+          v.thumbnail ?? '',
+          v.duration ?? '',
+          v.channelTitle ?? '',
+          v.publishedAt ?? ''
+        )
+        .run();
+    }
+
+    for (const p of body.playlists) {
+      if (!p?.id) continue;
+      await db
+        .prepare(
+          `INSERT INTO playlists (id, name, description, createdAt, thumbnail)
+           VALUES (?, ?, ?, ?, ?)`
+        )
+        .bind(p.id, p.name ?? '', p.description ?? '', p.createdAt ?? '', p.thumbnail ?? '')
+        .run();
+
+      if (Array.isArray(p.videos)) {
+        let pos = 0;
+        for (const vv of p.videos) {
+          const vid = typeof vv === 'string' ? vv : vv?.id;
+          if (!vid) continue;
+          await db
+            .prepare(
+              `INSERT INTO playlist_videos (playlist_id, video_id, position) VALUES (?, ?, ?)`
+            )
+            .bind(p.id, vid, pos++)
+            .run();
+        }
       }
     }
-  }
 
-  return new Response(
-    JSON.stringify({ ok: true, updatedAt: new Date().toISOString() }),
-    { headers }
-  );
+    return j({ ok: true, updatedAt: new Date().toISOString() });
+  } catch (e: any) {
+    return j({ error: String(e?.message || e) }, 500);
+  }
 };
