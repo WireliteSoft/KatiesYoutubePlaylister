@@ -8,7 +8,7 @@ interface Props {
   onAddToPlaylist: () => void;
   onDelete: (v: Video) => void;
   showDelete?: boolean;
-  dense?: boolean; // compact layout for grid tiles
+  dense?: boolean;
 }
 
 export const VideoCard: React.FC<Props> = ({
@@ -20,11 +20,14 @@ export const VideoCard: React.FC<Props> = ({
   dense = false,
 }) => {
   const titleClass = dense ? 'text-xs line-clamp-2' : 'text-sm sm:text-base line-clamp-2';
-  const channelClass = dense ? 'hidden sm:block truncate' : 'truncate';
+
+  const meta =
+    (video.channelTitle ? video.channelTitle : '') +
+    (video.duration ? (video.channelTitle ? ` • ${video.duration}` : `${video.duration}`) : '');
 
   return (
     <div className="group bg-gray-800 rounded-xl overflow-hidden shadow-sm ring-1 ring-gray-700/50">
-      {/* thumbnail (square on dense, 16:9 otherwise) */}
+      {/* thumbnail */}
       <div className="relative w-full">
         <div className="relative w-full" style={{ paddingTop: dense ? '100%' : '56.25%' }}>
           {video.thumbnail && (
@@ -49,10 +52,11 @@ export const VideoCard: React.FC<Props> = ({
 
       <div className="p-3 sm:p-4">
         <h3 className={`text-white font-semibold ${titleClass}`}>{video.title}</h3>
-        <div className="mt-1 text-xs text-gray-400 leading-5">
-          <span className={channelClass}>{video.channelTitle}</span>
-          {video.duration && <span className="block sm:inline">{video.duration}</span>}
-        </div>
+
+        {/* meta line — only render when something exists; no 'Unknown' */}
+        {meta ? (
+          <div className="mt-1 text-xs text-gray-400 leading-5 truncate">{meta}</div>
+        ) : null}
 
         <div className="mt-3 flex items-center gap-2">
           <button
