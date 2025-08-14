@@ -1,12 +1,11 @@
 import React, { useState, useCallback } from 'react';
-import { X, GripVertical, Trash2 } from 'lucide-react';
-import { savePlaylistMapping } from '../utils/snapshot';
+import { X, GripVertical } from 'lucide-react';
 import type { Playlist, Video } from '../types';
 
 interface PlaylistEditorProps {
   playlist: Playlist;
   onClose: () => void;
-  onSave?: (newOrder: Video[]) => void; // optional
+  onSave: (newOrder: Video[]) => void;
 }
 
 function reorder<T>(list: T[], startIndex: number, endIndex: number): T[] {
@@ -16,10 +15,8 @@ function reorder<T>(list: T[], startIndex: number, endIndex: number): T[] {
   return result;
 }
 
-export default function PlaylistEditor(props: PlaylistEditorProps) {
-  const { playlist, onClose } = props;
-
-  const [items, setItems] = useState<Video[]>(playlist.videos ?? []);
+export default function PlaylistEditor({ playlist, onClose, onSave }: PlaylistEditorProps) {
+  const [items, setItems] = useState<Video[]>(playlist.videos);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [overIndex, setOverIndex] = useState<number | null>(null);
 
@@ -57,35 +54,15 @@ export default function PlaylistEditor(props: PlaylistEditorProps) {
     },
     [dragIndex]
   );
-//
+
   const handleDragEnd = useCallback(() => {
     setDragIndex(null);
     setOverIndex(null);
   }, []);
 
   const saveOrder = useCallback(() => {
-    // Persist this playlist’s order to DB
-    savePlaylistMapping(playlist.id, items.map(v => v.id)).catch(() => {});
-    // Notify parent if provided (no bare `onSave` symbol anywhere)
-    props.onSave?.(items);
-  }, [items, playlist.id, props]);
-
-  const handleRemove = useCallback(
-    (videoId: string) => {
-      setItems(prev => {
-        const next = prev.filter(v => v.id !== videoId);
-
-        // Persist immediately so DB mapping updates now
-        savePlaylistMapping(playlist.id, next.map(v => v.id)).catch(() => {});
-
-        // Notify parent if it cares
-        props.onSave?.(next);
-
-        return next;
-      });
-    },
-    [playlist.id, props]
-  );
+    onSave(items);
+  }, [items, onSave]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
@@ -123,20 +100,8 @@ export default function PlaylistEditor(props: PlaylistEditorProps) {
                 <div className="text-white text-sm truncate">{v.title}</div>
                 <div className="text-gray-400 text-xs truncate">{v.channelTitle}</div>
               </div>
-
               <div className="ml-auto text-gray-400 text-xs">{v.duration}</div>
-
-              <button
-                type="button"
-                onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleRemove(v.id); }}
-                className="ml-3 p-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-white transition-colors"
-                aria-label="Remove from this playlist"
-                title="Remove from this playlist"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
-
-              <div className="ml-2 text-gray-500 text-xs w-10 text-right">#{idx + 1}</div>
+              <div className="ml-3 text-gray-500 text-xs w-10 text-right">#{idx + 1}</div>
             </div>
           ))}
           {items.length === 0 && (
