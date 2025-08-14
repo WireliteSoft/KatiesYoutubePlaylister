@@ -117,7 +117,17 @@ export default function PlaylistEditor({ playlist, onClose, onSave }: PlaylistEd
                 <div className="text-gray-400 text-xs truncate">{v.channelTitle}</div>
               </div>
               <div className="ml-auto text-gray-400 text-xs">{v.duration}</div>
-              <div className="ml-3 text-gray-500 text-xs w-10 text-right">#{idx + 1}</div>
+
+              <button
+   type="button"
+   onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleRemove(v.id); }}
+   className="ml-3 p-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-white transition-colors"
+   aria-label="Remove from this playlist"
+   title="Remove from this playlist"
+ >
+   <Trash2 className="w-4 h-4" />
+ </button>
+ <div className="ml-2 text-gray-500 text-xs w-10 text-right">#{idx + 1}</div>
             </div>
           ))}
           {items.length === 0 && (
