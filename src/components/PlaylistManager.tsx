@@ -1,3 +1,4 @@
+// src/components/PlaylistManager.tsx
 import React from 'react';
 import { ListPlus, Play, Pencil, Trash2 } from 'lucide-react';
 import type { Playlist, Video } from '../types';
@@ -54,7 +55,7 @@ export const PlaylistManager: React.FC<Props> = ({
 
   return (
     <div className="space-y-6">
-      {/* New playlist */}
+      {/* Create playlist */}
       <div className="rounded-xl bg-gray-800 border border-gray-700 p-4">
         <h3 className="text-white font-semibold mb-3">New Playlist</h3>
         <div className="space-y-2">
@@ -86,7 +87,7 @@ export const PlaylistManager: React.FC<Props> = ({
         </div>
       </div>
 
-      {/* Playlists list */}
+      {/* Playlists */}
       <div className="rounded-xl bg-gray-800 border border-gray-700">
         <div className="px-4 py-3 border-b border-gray-700">
           <h3 className="text-white font-semibold">Playlists ({playlists.length})</h3>
@@ -94,39 +95,49 @@ export const PlaylistManager: React.FC<Props> = ({
 
         <ul className="divide-y divide-gray-700">
           {playlists.map((p) => (
-            <li
-              key={p.id}
-              className="relative px-4 py-3"
-              // clicking empty space/preview plays the playlist
-              onClick={() => onPlayPlaylist(p)}
-            >
+            <li key={p.id} className="px-4 py-3">
               <div className="flex items-center gap-3">
-                {/* thumb */}
+                {/* Thumb */}
                 <div className="w-16 h-10 rounded overflow-hidden bg-gray-700 shrink-0">
                   {p.thumbnail ? (
                     <img src={p.thumbnail} alt="" className="w-full h-full object-cover" />
                   ) : null}
                 </div>
 
-                {/* text + preview strip */}
-                <div className="min-w-0 flex-1 pr-28">
-                  {/* ^ pr-28 reserves space so strip never sits under the buttons */}
+                {/* LEFT: title/desc/preview — this is the ONLY clickable area to play */}
+                <div
+                  className="min-w-0 flex-1 cursor-pointer"
+                  onClick={() => onPlayPlaylist(p)}
+                >
                   <div className="text-white font-medium truncate">{p.name}</div>
                   {p.description ? (
                     <div className="text-xs text-gray-400 truncate">{p.description}</div>
                   ) : null}
 
-                  {/* preview strip (if you render thumbnails here) */}
-                  <div className="mt-2 flex items-center gap-2 overflow-x-auto">
-                    {/* ...your existing small thumbs go here... */}
-                  </div>
-
-                  {/* any right-side gradient must not capture clicks */}
-                  <div className="pointer-events-none absolute inset-y-0 right-0 w-16 bg-gradient-to-l from-gray-800/0 to-transparent" />
+                  {/* tiny preview strip (first few videos) */}
+                  {Array.isArray(p.videos) && p.videos.length > 0 && (
+                    <div className="mt-2 flex items-center gap-2 overflow-x-auto">
+                      {p.videos.slice(0, 6).map((v) => (
+                        <img
+                          key={v.id}
+                          src={v.thumbnail}
+                          alt=""
+                          className="w-12 h-7 rounded object-cover bg-gray-700"
+                          loading="lazy"
+                          decoding="async"
+                        />
+                      ))}
+                      {p.videos.length > 6 && (
+                        <span className="px-2 py-1 text-xs rounded bg-gray-700 text-gray-200">
+                          +{p.videos.length - 6}
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
 
-                {/* ACTIONS: absolutely placed, highest z-index */}
-                <div className="absolute right-3 top-1/2 -translate-y-1/2 z-30 flex items-center gap-2">
+                {/* RIGHT: actions — use capture-phase stoppers so row can't steal the click */}
+                <div className="flex items-center gap-2">
                   <button
                     type="button"
                     onMouseDownCapture={(e) => e.stopPropagation()}
