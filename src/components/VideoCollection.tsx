@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, Grid, List, CheckCircle } from 'lucide-react';
+import { Search, Grid, List } from 'lucide-react';
 import { Video } from '../types';
 import { VideoCard } from './VideoCard';
 
@@ -20,122 +20,105 @@ export const VideoCollection: React.FC<VideoCollectionProps> = ({
   onVideoDeselect,
   onVideoDelete,
 }) => {
-    const [showDelete, setShowDelete] = useState(false);
-const [searchTerm, setSearchTerm] = useState('');
+  const [showDelete, setShowDelete] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
-  const filteredVideos = videos.filter(video =>
-    video.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    video.channelTitle.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredVideos = videos.filter(v => {
+    const t = searchTerm.toLowerCase();
+    return v.title.toLowerCase().includes(t) || v.channelTitle.toLowerCase().includes(t);
+  });
 
   const isSelected = (video: Video) => selectedVideos.some(v => v.id === video.id);
 
   const handleVideoCardClick = (video: Video) => {
-    if (isSelected(video)) {
-      onVideoDeselect(video);
-    } else {
-      onVideoSelect(video);
-    }
+    if (isSelected(video)) onVideoDeselect(video);
+    else onVideoSelect(video);
   };
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-4">
-        <label className="flex items-center gap-2 text-sm text-gray-300">
+      {/* Top bar */}
+      <div className="flex items-center justify-between">
+        <label className="flex items-center gap-2 text-sm text-gray-300 select-none">
           <input
             type="checkbox"
-            className="h-4 w-4 rounded border-gray-600 bg-gray-700"
+            className="h-4 w-4 accent-red-600"
             checked={showDelete}
-            onChange={(e) => setShowDelete(e.target.checked)}
+            onChange={e => setShowDelete(e.target.checked)}
           />
           Delete videos
         </label>
+
         <h2 className="text-2xl font-bold text-white">
           Video Collection ({filteredVideos.length})
         </h2>
-        
-        {selectedVideos.length > 0 && (
-          <div className="text-green-400 font-medium">
-            {selectedVideos.length} selected
+
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              placeholder="Search videos..."
+              className="pl-8 pr-3 py-2 rounded-md bg-gray-700 text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-600 w-48 sm:w-64"
+            />
           </div>
-        )}
-      </div>
-
-      {/* Search and View Controls */}
-      <div className="flex items-center gap-4">
-        <div className="flex-1 relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search videos..."
-            className="w-full pl-10 pr-4 py-3 bg-gray-700 text-white rounded-lg border border-gray-600 focus:ring-2 focus:ring-red-500 focus:border-transparent"
-          />
-        </div>
-        
-        <div className="flex bg-gray-700 rounded-lg overflow-hidden">
           <button
+            type="button"
             onClick={() => setViewMode('grid')}
-            className={`p-3 transition-colors ${
-              viewMode === 'grid' ? 'bg-red-600 text-white' : 'text-gray-400 hover:text-white'
-            }`}
+            className={`p-2 rounded-md ${viewMode === 'grid' ? 'bg-red-600 text-white' : 'bg-gray-700 text-gray-300'}`}
+            title="Grid view"
           >
-            <Grid className="w-5 h-5" />
+            <Grid className="w-4 h-4" />
           </button>
           <button
+            type="button"
             onClick={() => setViewMode('list')}
-            className={`p-3 transition-colors ${
-              viewMode === 'list' ? 'bg-red-600 text-white' : 'text-gray-400 hover:text-white'
-            }`}
+            className={`p-2 rounded-md ${viewMode === 'list' ? 'bg-red-600 text-white' : 'bg-gray-700 text-gray-300'}`}
+            title="List view"
           >
-            <List className="w-5 h-5" />
+            <List className="w-4 h-4" />
           </button>
         </div>
       </div>
 
-      {/* Video Grid/List */}
-      {filteredVideos.length === 0 ? (
-        <div className="text-center text-gray-400 py-12">
-          <p className="text-xl mb-2">
-            {videos.length === 0 ? 'No videos added yet' : 'No videos match your search'}
-          </p>
-          <p>
-            {videos.length === 0 
-              ? 'Start by pasting a YouTube URL above'
-              : 'Try a different search term'
-            }
-          </p>
-        </div>
-      ) : (
-        <div className={
-          viewMode === 'grid'
-            ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6'
-            : 'space-y-4'
-        }>
-          {filteredVideos.map((video) => (
+      {/* GRID MODE — forces 4-up on phones */}
+      {viewMode === 'grid' && (
+        <div className="grid grid-cols-2 min-[420px]:grid-cols-3 min-[520px]:grid-cols-4 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2 sm:gap-3 md:gap-4">
+          {filteredVideos.map(video => (
             <div key={video.id} className="relative">
               {isSelected(video) && (
-                <div className="absolute top-2 left-2 z-10 bg-green-500 text-white rounded-full p-1">
-                  <CheckCircle className="w-5 h-5 fill-current" />
-                </div>
+                <div className="absolute inset-0 z-10 rounded-lg ring-2 ring-red-500 pointer-events-none" />
               )}
-              <div
-                className={`cursor-pointer transition-all ${
-                  isSelected(video) ? 'ring-2 ring-green-500 ring-offset-2 ring-offset-gray-900' : ''
-                }`}
-                onClick={() => handleVideoCardClick(video)}
-              >
-                <VideoCard
-                  video={video}
-                  onPlay={onVideoPlay}
-                  onAddToPlaylist={() => handleVideoCardClick(video)}
-                  onDelete={onVideoDelete}
-                  showDelete={showDelete}
-                />
-              </div>
+              <VideoCard
+                video={video}
+                onPlay={onVideoPlay}
+                onAddToPlaylist={() => handleVideoCardClick(video)}
+                onDelete={onVideoDelete}
+                showDelete={showDelete}
+                dense
+              />
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* LIST MODE */}
+      {viewMode === 'list' && (
+        <div className="space-y-2">
+          {filteredVideos.map(video => (
+            <div key={video.id} className="relative">
+              {isSelected(video) && (
+                <div className="absolute inset-y-0 left-0 w-1 bg-red-600 rounded-r" />
+              )}
+              <VideoCard
+                video={video}
+                onPlay={onVideoPlay}
+                onAddToPlaylist={() => handleVideoCardClick(video)}
+                onDelete={onVideoDelete}
+                showDelete={showDelete}
+              />
             </div>
           ))}
         </div>
