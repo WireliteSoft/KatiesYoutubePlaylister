@@ -52,6 +52,19 @@ export function readMirrorFromLocalStorage(): BackupPayload | null {
   }
 }
 
+// Persist ONLY one playlist's mapping (merge mode replaces that playlist's rows)
+export async function savePlaylistMapping(playlistId: string, videoIds: string[]) {
+  await fetch('/api/library', {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      version: 1,
+      mode: 'merge',
+      playlists: [{ id: playlistId, videos: videoIds }],
+    }),
+  });
+}
+
 // Not used when you have D1
 export async function requestPersistentStorage() { return false as const; }
 export async function saveSnapshotOPFS(_: Video[], __: Playlist[]) { return false as const; }
