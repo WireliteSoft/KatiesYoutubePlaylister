@@ -11,7 +11,7 @@ type Props = {
   onDeletePlaylist: (id: string) => void;
   onPlayPlaylist: (p: Playlist) => void;
   onClearSelection: () => void;
-  onReorderPlaylist: (id: string, newOrder: Video[]) => void; // <-- required
+  onReorderPlaylist: (id: string, newOrder: Video[]) => void;
 };
 
 export const PlaylistManager: React.FC<Props> = ({
@@ -34,29 +34,15 @@ export const PlaylistManager: React.FC<Props> = ({
   const handleCreate = () => {
     if (!canCreate) return;
     onCreatePlaylist(name.trim(), description.trim(), selectedVideos);
-    setName('');
-    setDescription('');
-    onClearSelection();
+    setName(''); setDescription(''); onClearSelection();
   };
 
-  const openEditor = (p: Playlist) => {
-    setEditing(p);
-    setIsEditorOpen(true);
-  };
-
-  const closeEditor = () => {
-    setIsEditorOpen(false);
-    setEditing(null);
-  };
-
-  const saveEditor = (id: string, newOrder: Video[]) => {
-    onReorderPlaylist(id, newOrder); // persist back up to App (and server)
-    closeEditor();
-  };
+  const openEditor = (p: Playlist) => { setEditing(p); setIsEditorOpen(true); };
+  const closeEditor = () => { setIsEditorOpen(false); setEditing(null); };
+  const saveEditor = (id: string, newOrder: Video[]) => { onReorderPlaylist(id, newOrder); closeEditor(); };
 
   return (
     <div className="space-y-6">
-      {/* Create playlist */}
       <div className="rounded-xl bg-gray-800 border border-gray-700 p-4">
         <h3 className="text-white font-semibold mb-3">New Playlist</h3>
         <div className="space-y-2">
@@ -86,7 +72,6 @@ export const PlaylistManager: React.FC<Props> = ({
         </div>
       </div>
 
-      {/* Existing playlists */}
       <div className="rounded-xl bg-gray-800 border border-gray-700">
         <div className="px-4 py-3 border-b border-gray-700">
           <h3 className="text-white font-semibold">Playlists ({playlists.length})</h3>
@@ -97,53 +82,53 @@ export const PlaylistManager: React.FC<Props> = ({
             <li
               key={p.id}
               className="flex items-center gap-3 px-4 py-3 hover:bg-gray-750/60 cursor-pointer"
-              onClick={() => onPlayPlaylist(p)} // whole row plays
+              onClick={() => onPlayPlaylist(p)}  // row click plays
             >
-              {/* thumb */}
               <div className="w-16 h-10 rounded overflow-hidden bg-gray-700 shrink-0">
-                {p.thumbnail ? (
-                  <img src={p.thumbnail} alt="" className="w-full h-full object-cover" />
-                ) : null}
+                {p.thumbnail ? <img src={p.thumbnail} alt="" className="w-full h-full object-cover" /> : null}
               </div>
 
               <div className="min-w-0 flex-1">
                 <div className="text-white font-medium truncate">{p.name}</div>
-                {/* No 'Unknown' filler — only show if any text exists */}
-                {p.description ? (
-                  <div className="text-xs text-gray-400 truncate">{p.description}</div>
-                ) : null}
+                {p.description ? (<div className="text-xs text-gray-400 truncate">{p.description}</div>) : null}
               </div>
 
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  className="p-2 rounded-md bg-gray-700 hover:bg-gray-600 text-gray-100"
+                  onMouseDownCapture={(e) => e.stopPropagation()}
+                  onTouchStartCapture={(e) => e.stopPropagation()}
                   onClick={(e) => { e.stopPropagation(); onPlayPlaylist(p); }}
+                  className="relative z-10 p-2 rounded-md bg-gray-700 hover:bg-gray-600 text-gray-100"
                   title="Play"
                   aria-label="Play"
                 >
-                  <Play className="w-4 h-4" />
+                  <Play className="w-4 h-4 pointer-events-none" />
                 </button>
 
-                {/* IMPORTANT: stopPropagation so the row click doesn't eat the Edit click */}
+                {/* EDIT — capture + z-index so nothing steals the click */}
                 <button
                   type="button"
-                  className="p-2 rounded-md bg-gray-700 hover:bg-gray-600 text-gray-100"
+                  onMouseDownCapture={(e) => e.stopPropagation()}
+                  onTouchStartCapture={(e) => e.stopPropagation()}
                   onClick={(e) => { e.stopPropagation(); openEditor(p); }}
+                  className="relative z-10 p-2 rounded-md bg-gray-700 hover:bg-gray-600 text-gray-100"
                   title="Edit order"
                   aria-label="Edit"
                 >
-                  <Pencil className="w-4 h-4" />
+                  <Pencil className="w-4 h-4 pointer-events-none" />
                 </button>
 
                 <button
                   type="button"
-                  className="p-2 rounded-md bg-red-600 hover:bg-red-700 text-white"
+                  onMouseDownCapture={(e) => e.stopPropagation()}
+                  onTouchStartCapture={(e) => e.stopPropagation()}
                   onClick={(e) => { e.stopPropagation(); onDeletePlaylist(p.id); }}
+                  className="relative z-10 p-2 rounded-md bg-red-600 hover:bg-red-700 text-white"
                   title="Delete playlist"
                   aria-label="Delete"
                 >
-                  <Trash2 className="w-4 h-4" />
+                  <Trash2 className="w-4 h-4 pointer-events-none" />
                 </button>
               </div>
             </li>
@@ -154,7 +139,6 @@ export const PlaylistManager: React.FC<Props> = ({
         </ul>
       </div>
 
-      {/* Editor modal */}
       {editing && (
         <PlaylistEditor
           isOpen={isEditorOpen}
