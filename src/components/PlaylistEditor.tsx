@@ -1,22 +1,7 @@
 import React, { useState, useCallback } from 'react';
-//import { X, GripVertical } from 'lucide-react';
 import { X, GripVertical, Trash2 } from 'lucide-react';
 import { savePlaylistMapping } from '../utils/snapshot';
 import type { Playlist, Video } from '../types';
-
-const handleRemove = useCallback((videoId: string) => {
-  setItems(prev => {
-    const next = prev.filter(v => v.id !== videoId);
-
-    // 1) Persist to DB immediately (replaces this playlist’s mapping)
-    savePlaylistMapping(playlist.id, next.map(v => v.id)).catch(() => {});
-
-    // 2) Update parent state (keeps UI + player in sync)
-    onSave(next);
-
-    return next;
-  });
-}, [onSave, playlist.id]);
 
 interface PlaylistEditorProps {
   playlist: Playlist;
@@ -31,8 +16,10 @@ function reorder<T>(list: T[], startIndex: number, endIndex: number): T[] {
   return result;
 }
 
-export default function PlaylistEditor({ playlist, onClose, onSave }: PlaylistEditorProps) {
-  const [items, setItems] = useState<Video[]>(playlist.videos);
+export default function PlaylistEditor(props: PlaylistEditorProps) {
+  const { playlist, onClose, onSave } = props;
+
+  const [items, setItems] = useState<Video[]>(playlist.videos ?? []);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [overIndex, setOverIndex] = useState<number | null>(null);
 
@@ -80,6 +67,23 @@ export default function PlaylistEditor({ playlist, onClose, onSave }: PlaylistEd
     onSave(items);
   }, [items, onSave]);
 
+  const handleRemove = useCallback(
+    (videoId: string) => {
+      setItems(prev => {
+        const next = prev.filter(v => v.id !== videoId);
+
+        // 1) Persist to DB immediately (replaces this playlist’s mapping)
+        savePlaylistMapping(playlist.id, next.map(v => v.id)).catch(() => {});
+
+        // 2) Update parent state (keeps UI + player in sync)
+        onSave(next);
+
+        return next;
+      });
+    },
+    [onSave, playlist.id]
+  );
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
       <div className="w-full max-w-3xl bg-gray-900 rounded-2xl overflow-hidden shadow-2xl">
@@ -116,20 +120,23 @@ export default function PlaylistEditor({ playlist, onClose, onSave }: PlaylistEd
                 <div className="text-white text-sm truncate">{v.title}</div>
                 <div className="text-gray-400 text-xs truncate">{v.channelTitle}</div>
               </div>
+
               <div className="ml-auto text-gray-400 text-xs">{v.duration}</div>
 
               <button
-   type="button"
-   onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleRemove(v.id); }}
-   className="ml-3 p-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-white transition-colors"
-   aria-label="Remove from this playlist"
-   title="Remove from this playlist"
- >
-   <Trash2 className="w-4 h-4" />
- </button>
- <div className="ml-2 text-gray-500 text-xs w-10 text-right">#{idx + 1}</div>
+                type="button"
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleRemove(v.id); }}
+                className="ml-3 p-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-white transition-colors"
+                aria-label="Remove from this playlist"
+                title="Remove from this playlist"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+
+              <div className="ml-2 text-gray-500 text-xs w-10 text-right">#{idx + 1}</div>
             </div>
           ))}
+
           {items.length === 0 && (
             <div className="text-gray-400 text-sm text-center py-8">This playlist is empty.</div>
           )}
