@@ -144,7 +144,13 @@ function App() {
   };
 
   const handleDeletePlaylist = (id: string) => {
-    setPlaylists(prev => prev.filter(p => p.id !== id));
+      setPlaylists(prev => {
+        const next = prev.filter(p => p.id !== id);
+    // persist immediately so the deletion is reflected in D1 now
+    saveRemote(videos, next);
+    mirrorToLocalStorage(videos, next);
+    return next;
+  });
     if (currentPlaylist?.id === id) {
       setIsPlayerOpen(false);
       setCurrentPlaylist(null);
