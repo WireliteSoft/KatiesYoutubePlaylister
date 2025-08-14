@@ -1,5 +1,7 @@
 import React, { useState, useCallback } from 'react';
-import { X, GripVertical } from 'lucide-react';
+//import { X, GripVertical } from 'lucide-react';
+import { X, GripVertical, Trash2 } from 'lucide-react';
+import { savePlaylistMapping } from '../utils/snapshot';
 import type { Playlist, Video } from '../types';
 
 interface PlaylistEditorProps {
