@@ -26,7 +26,7 @@ export async function saveRemote(videos: Video[], playlists: Playlist[]) {
     await fetch(REMOTE_URL, {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ version: 1, videos, playlists }),
+      body: JSON.stringify({ version: 1, mode: 'replace', videos, playlists }),
     });
   } catch {}
 }
