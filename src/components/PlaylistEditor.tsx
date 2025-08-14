@@ -6,7 +6,7 @@ import type { Playlist, Video } from '../types';
 interface PlaylistEditorProps {
   playlist: Playlist;
   onClose: () => void;
-  onSave?: (newOrder: Video[]) => void; // optional; we’ll default to no-op
+  onSave?: (newOrder: Video[]) => void; // optional
 }
 
 function reorder<T>(list: T[], startIndex: number, endIndex: number): T[] {
@@ -18,7 +18,6 @@ function reorder<T>(list: T[], startIndex: number, endIndex: number): T[] {
 
 export default function PlaylistEditor(props: PlaylistEditorProps) {
   const { playlist, onClose } = props;
-  const onSave = props.onSave ?? (() => {}); // <- guarantees it's defined
 
   const [items, setItems] = useState<Video[]>(playlist.videos ?? []);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
@@ -65,6 +64,103 @@ export default function PlaylistEditor(props: PlaylistEditorProps) {
   }, []);
 
   const saveOrder = useCallback(() => {
-    // persist to DB first so refresh reflects it
+    // Persist this playlist’s order to DB
     savePlaylistMapping(playlist.id, items.map(v => v.id)).catch(() => {});
-    onSave(items); //
+    // Notify parent if provided (no bare `onSave` symbol anywhere)
+    props.onSave?.(items);
+  }, [items, playlist.id, props]);
+
+  const handleRemove = useCallback(
+    (videoId: string) => {
+      setItems(prev => {
+        const next = prev.filter(v => v.id !== videoId);
+
+        // Persist immediately so DB mapping updates now
+        savePlaylistMapping(playlist.id, next.map(v => v.id)).catch(() => {});
+
+        // Notify parent if it cares
+        props.onSave?.(next);
+
+        return next;
+      });
+    },
+    [playlist.id, props]
+  );
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+      <div className="w-full max-w-3xl bg-gray-900 rounded-2xl overflow-hidden shadow-2xl">
+        <div className="flex items-center justify-between p-4 border-b border-gray-800">
+          <h3 className="text-white font-semibold truncate pr-4">
+            Edit Order — {playlist.name}
+          </h3>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-white transition-colors"
+            aria-label="Close"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="max-h-[60vh] overflow-y-auto p-4 space-y-2">
+          {items.map((v, idx) => (
+            <div
+              key={v.id}
+              draggable
+              onDragStart={handleDragStart(idx)}
+              onDragOver={handleDragOver(idx)}
+              onDrop={handleDrop(idx)}
+              onDragEnd={handleDragEnd}
+              className={`flex items-center gap-3 p-2 rounded-lg border ${
+                overIndex === idx ? 'bg-gray-800 border-gray-600' : 'bg-gray-800/60 border-gray-700'
+              }`}
+            >
+              <GripVertical className="w-5 h-5 text-gray-400 shrink-0" />
+              <img src={v.thumbnail} alt="" className="w-16 h-9 rounded object-cover shrink-0" />
+              <div className="min-w-0">
+                <div className="text-white text-sm truncate">{v.title}</div>
+                <div className="text-gray-400 text-xs truncate">{v.channelTitle}</div>
+              </div>
+
+              <div className="ml-auto text-gray-400 text-xs">{v.duration}</div>
+
+              <button
+                type="button"
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleRemove(v.id); }}
+                className="ml-3 p-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-white transition-colors"
+                aria-label="Remove from this playlist"
+                title="Remove from this playlist"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+
+              <div className="ml-2 text-gray-500 text-xs w-10 text-right">#{idx + 1}</div>
+            </div>
+          ))}
+          {items.length === 0 && (
+            <div className="text-gray-400 text-sm text-center py-8">This playlist is empty.</div>
+          )}
+        </div>
+
+        <div className="flex items-center justify-end gap-3 p-4 border-t border-gray-800">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-white transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={saveOrder}
+            className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white transition-colors"
+          >
+            Save Order
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
