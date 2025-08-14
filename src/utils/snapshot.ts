@@ -1,98 +1,57 @@
-// src/utils/snapshot.ts
 import type { Video, Playlist } from '../types';
 
 export type BackupPayload = {
   version: number;
-  exportedAt: string;
+  updatedAt: string;
   videos: Video[];
   playlists: Playlist[];
 };
 
-const FILENAME = 'youtube-collection-backup.json';
+// The function above deploys at this path:
+const REMOTE_URL = '/api/library';
 
-function makePayload(videos: Video[], playlists: Playlist[]): BackupPayload {
-  return {
-    version: 1,
-    exportedAt: new Date().toISOString(),
-    videos,
-    playlists,
-  };
-}
-
-// Try to get Origin Private File System directory (Chromium).
-// We type as any to avoid TS lib friction.
-async function getOPFSRoot(): Promise<any | null> {
+// ---- Remote (D1 via Pages Function) ----
+export async function loadRemote(): Promise<BackupPayload | null> {
   try {
-    const nav: any = navigator as any;
-    if (!nav?.storage?.getDirectory) return null;
-    const root = await nav.storage.getDirectory();
-    return root;
+    const r = await fetch(REMOTE_URL, { method: 'GET', headers: { accept: 'application/json' } });
+    if (!r.ok) return null;
+    return (await r.json()) as BackupPayload;
   } catch {
     return null;
   }
 }
 
-export async function requestPersistentStorage(): Promise<boolean> {
+export async function saveRemote(videos: Video[], playlists: Playlist[]) {
   try {
-    if ('storage' in navigator && 'persist' in navigator.storage) {
-      // @ts-ignore
-      return await navigator.storage.persist();
-    }
+    await fetch(REMOTE_URL, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ version: 1, videos, playlists }),
+    });
   } catch {}
-  return false;
 }
 
-export async function saveSnapshotOPFS(videos: Video[], playlists: Playlist[]): Promise<boolean> {
-  const root = await getOPFSRoot();
-  if (!root) return false;
-  try {
-    const fileHandle = await root.getFileHandle(FILENAME, { create: true });
-    const writable = await fileHandle.createWritable();
-    const data = JSON.stringify(makePayload(videos, playlists));
-    await writable.write(data);
-    await writable.close();
-    return true;
-  } catch (e) {
-    console.error('[snapshot] save OPFS failed:', e);
-    return false;
-  }
-}
-
-export async function loadSnapshotOPFS(): Promise<BackupPayload | null> {
-  const root = await getOPFSRoot();
-  if (!root) return null;
-  try {
-    const fileHandle = await root.getFileHandle(FILENAME, { create: false });
-    const file = await fileHandle.getFile();
-    const text = await file.text();
-    const data = JSON.parse(text);
-    if (!Array.isArray(data?.videos) || !Array.isArray(data?.playlists)) return null;
-    return data as BackupPayload;
-  } catch {
-    return null;
-  }
-}
-
-// Fallback to localStorage mirror (still same origin, but a second copy).
+// ---- Local mirror (safety) ----
 const MIRROR_KEY = '__yt_collection_backup__';
 
-export function mirrorToLocalStorage(videos: Video[], playlists: Playlist[]): void {
+export function mirrorToLocalStorage(videos: Video[], playlists: Playlist[]) {
   try {
-    const data = makePayload(videos, playlists);
-    localStorage.setItem(MIRROR_KEY, JSON.stringify(data));
-  } catch (e) {
-    console.warn('[snapshot] mirror LS failed:', e);
-  }
+    localStorage.setItem(
+      MIRROR_KEY,
+      JSON.stringify({ version: 1, updatedAt: new Date().toISOString(), videos, playlists })
+    );
+  } catch {}
 }
 
 export function readMirrorFromLocalStorage(): BackupPayload | null {
   try {
     const raw = localStorage.getItem(MIRROR_KEY);
-    if (!raw) return null;
-    const data = JSON.parse(raw);
-    if (!Array.isArray(data?.videos) || !Array.isArray(data?.playlists)) return null;
-    return data as BackupPayload;
+    return raw ? (JSON.parse(raw) as BackupPayload) : null;
   } catch {
     return null;
   }
 }
+
+// Not used when you have D1
+export async function requestPersistentStorage() { return false as const; }
+export async function saveSnapshotOPFS(_: Video[], __: Playlist[]) { return false as const; }
