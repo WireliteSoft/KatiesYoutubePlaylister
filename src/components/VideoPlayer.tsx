@@ -139,11 +139,10 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
           </button>
         </div>
 
-        {/* Player */}
         <div className="relative w-full aspect-video bg-black">
           <iframe
             /*  remove key={video.id} to avoid remounts */
-            id={iframeIdRef.current}         {/* stable id */}
+            id={iframeIdRef.current}  
             src={embedSrc}
             title={video.title || 'YouTube video player'}
             className="absolute inset-0 w-full h-full"
@@ -154,7 +153,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
           ></iframe>
         </div>
 
-        {/* Controls */}
         {playlist && (
           <div className="flex items-center justify-between p-4 border-t border-gray-800">
             <button
