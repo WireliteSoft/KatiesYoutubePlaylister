@@ -30,7 +30,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 }) => {
   const playerRef = useRef<any>(null);
 
-  // ✅ stable iframe id for the whole component lifetime
+  // stable iframe id for the whole component lifetime
   const iframeIdRef = useRef<string>('yt-embed-fixed');
 
   const embedSrc = useMemo(() => {
@@ -142,8 +142,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         {/* Player */}
         <div className="relative w-full aspect-video bg-black">
           <iframe
-            /* ❌ remove key={video.id} to avoid remounts */
-            id={iframeIdRef.current}         {/* ✅ stable id */}
+            /*  remove key={video.id} to avoid remounts */
+            id={iframeIdRef.current}         {/* stable id */}
             src={embedSrc}
             title={video.title || 'YouTube video player'}
             className="absolute inset-0 w-full h-full"
