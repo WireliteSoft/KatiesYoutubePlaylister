@@ -10,6 +10,8 @@ interface VideoCollectionProps {
   onVideoSelect: (video: Video) => void;
   onVideoDeselect: (video: Video) => void;
   onVideoDelete: (video: Video) => void;
+  onToggleSelectAll?: () => void;  // <-- add
+  allSelected?: boolean;           // <-- add
 }
 
 export const VideoCollection: React.FC<VideoCollectionProps> = ({
@@ -38,7 +40,6 @@ export const VideoCollection: React.FC<VideoCollectionProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Top bar */}
       <div className="flex items-center justify-between">
         <label className="flex items-center gap-2 text-sm text-gray-300 select-none">
           <input
@@ -83,7 +84,6 @@ export const VideoCollection: React.FC<VideoCollectionProps> = ({
         </div>
       </div>
 
-      {/* GRID MODE — forces 4-up on phones */}
       {viewMode === 'grid' && (
         <div className="grid grid-cols-2 min-[420px]:grid-cols-3 min-[520px]:grid-cols-4 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2 sm:gap-3 md:gap-4">
           {filteredVideos.map(video => (
@@ -104,7 +104,6 @@ export const VideoCollection: React.FC<VideoCollectionProps> = ({
         </div>
       )}
 
-      {/* LIST MODE */}
       {viewMode === 'list' && (
         <div className="space-y-2">
           {filteredVideos.map(video => (
