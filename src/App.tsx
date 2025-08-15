@@ -203,6 +203,17 @@ function App() {
     setCurrentIndex(prev);
     setCurrentVideo(currentPlaylist.videos[prev]);
   };
+  // Select/Deselect All
+const allSelected = videos.length > 0 && selectedVideos.length === videos.length;
+
+const toggleSelectAll = React.useCallback(() => {
+  if (allSelected) {
+    setSelectedVideos([]);
+  } else {
+    // Select everything currently in the videos list
+    setSelectedVideos(videos);
+  }
+}, [allSelected, videos, setSelectedVideos]);
 
   // ---------- UI ----------
   return (
