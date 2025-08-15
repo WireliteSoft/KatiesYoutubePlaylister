@@ -10,8 +10,8 @@ interface VideoCollectionProps {
   onVideoSelect: (video: Video) => void;
   onVideoDeselect: (video: Video) => void;
   onVideoDelete: (video: Video) => void;
-  onToggleSelectAll?: () => void;  // <-- add
-  allSelected?: boolean;           // <-- add
+  onToggleSelectAll?: () => void;  // added
+  allSelected?: boolean;           // added
 }
 
 export const VideoCollection: React.FC<VideoCollectionProps> = ({
@@ -21,6 +21,8 @@ export const VideoCollection: React.FC<VideoCollectionProps> = ({
   onVideoSelect,
   onVideoDeselect,
   onVideoDelete,
+  onToggleSelectAll,   // added
+  allSelected,         // added
 }) => {
   const [showDelete, setShowDelete] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -37,6 +39,10 @@ export const VideoCollection: React.FC<VideoCollectionProps> = ({
     if (isSelected(video)) onVideoDeselect(video);
     else onVideoSelect(video);
   };
+
+  // counts for the button label
+  const total = videos.length;
+  const selected = selectedVideos.length;
 
   return (
     <div className="space-y-6">
@@ -56,6 +62,18 @@ export const VideoCollection: React.FC<VideoCollectionProps> = ({
         </h2>
 
         <div className="flex items-center gap-2">
+          {onToggleSelectAll && (
+            <button
+              type="button"
+              onClick={onToggleSelectAll}
+              className="px-3 py-2 rounded-md bg-gray-800 hover:bg-gray-700 border border-gray-600 text-sm"
+              aria-pressed={!!allSelected}
+              title={allSelected ? 'Deselect all videos' : 'Select all videos'}
+            >
+              {allSelected ? 'Deselect All' : 'Select All'} ({selected}/{total})
+            </button>
+          )}
+
           <div className="relative">
             <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input
