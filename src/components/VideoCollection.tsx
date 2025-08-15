@@ -80,6 +80,7 @@ export const VideoCollection: React.FC<VideoCollectionProps> = ({
             type="button"
             onClick={allLibrarySelected ? handleDeselectAllLibrary : handleSelectAllLibrary}
             className="px-3 py-2 rounded-md bg-gray-800 hover:bg-gray-700 border border-gray-600 text-white text-sm"
+            style={{ color: '#fff' }}
             aria-pressed={allLibrarySelected}
             title={allLibrarySelected ? 'Deselect all videos' : 'Select all videos'}
           >
