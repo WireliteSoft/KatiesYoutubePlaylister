@@ -10,8 +10,6 @@ interface VideoCollectionProps {
   onVideoSelect: (video: Video) => void;
   onVideoDeselect: (video: Video) => void;
   onVideoDelete: (video: Video) => void;
-  onToggleSelectAll?: () => void;  // added
-  allSelected?: boolean;           // added
 }
 
 export const VideoCollection: React.FC<VideoCollectionProps> = ({
@@ -21,8 +19,6 @@ export const VideoCollection: React.FC<VideoCollectionProps> = ({
   onVideoSelect,
   onVideoDeselect,
   onVideoDelete,
-  onToggleSelectAll,   // added
-  allSelected,         // added
 }) => {
   const [showDelete, setShowDelete] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -40,9 +36,20 @@ export const VideoCollection: React.FC<VideoCollectionProps> = ({
     else onVideoSelect(video);
   };
 
-  // counts for the button label
-  const total = videos.length;
-  const selected = selectedVideos.length;
+  // ---- Select/Deselect ALL VISIBLE (after search/filter) ----
+  const totalVisible = filteredVideos.length;
+  const selectedVisible = filteredVideos.reduce((n, v) => n + (isSelected(v) ? 1 : 0), 0);
+  const allVisibleSelected = totalVisible > 0 && selectedVisible === totalVisible;
+
+  const handleToggleSelectAllVisible = () => {
+    if (allVisibleSelected) {
+      // Deselect all visible
+      filteredVideos.forEach(v => { if (isSelected(v)) onVideoDeselect(v); });
+    } else {
+      // Select all visible
+      filteredVideos.forEach(v => { if (!isSelected(v)) onVideoSelect(v); });
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -62,17 +69,16 @@ export const VideoCollection: React.FC<VideoCollectionProps> = ({
         </h2>
 
         <div className="flex items-center gap-2">
-          {onToggleSelectAll && (
-            <button
-              type="button"
-              onClick={onToggleSelectAll}
-              className="px-3 py-2 rounded-md bg-gray-800 hover:bg-gray-700 border border-gray-600 text-sm"
-              aria-pressed={!!allSelected}
-              title={allSelected ? 'Deselect all videos' : 'Select all videos'}
-            >
-              {allSelected ? 'Deselect All' : 'Select All'} ({selected}/{total})
-            </button>
-          )}
+          {/* Select/Deselect all currently visible videos */}
+          <button
+            type="button"
+            onClick={handleToggleSelectAllVisible}
+            className="px-3 py-2 rounded-md bg-gray-800 hover:bg-gray-700 border border-gray-600 text-sm"
+            aria-pressed={allVisibleSelected}
+            title={allVisibleSelected ? 'Deselect all visible' : 'Select all visible'}
+          >
+            {allVisibleSelected ? 'Deselect All' : 'Select All'} ({selectedVisible}/{totalVisible})
+          </button>
 
           <div className="relative">
             <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
