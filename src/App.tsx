@@ -1,7 +1,7 @@
 // src/App.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Youtube } from 'lucide-react';
-import type { Video, Playlist } from './types';
+import { Video, Playlist } from './types';
 import { VideoInput } from './components/VideoInput';
 import { VideoCollection } from './components/VideoCollection';
 import { PlaylistManager } from './components/PlaylistManager';
@@ -15,60 +15,37 @@ import {
 } from './utils/snapshot';
 
 function App() {
-  // Persistent library
   const [videos, setVideos] = useLocalStorage<Video[]>('videos', []);
   const [playlists, setPlaylists] = useLocalStorage<Playlist[]>('playlists', []);
-
-  // UI state
   const [selectedVideos, setSelectedVideos] = useState<Video[]>([]);
   const [currentVideo, setCurrentVideo] = useState<Video | null>(null);
   const [currentPlaylist, setCurrentPlaylist] = useState<Playlist | null>(null);
   const [currentIndex, setCurrentIndex] = useState<number | null>(null);
   const [isPlayerOpen, setIsPlayerOpen] = useState(false);
 
-  // -------- Restore on load: Remote -> Mirror -> keep local --------
-  useEffect(() => {
+  // On load: try REMOTE (D1) first, then local mirror fallback
+  React.useEffect(() => {
     (async () => {
       try {
         const remote = await loadRemote();
-        if (remote && ((remote.videos?.length ?? 0) || (remote.playlists?.length ?? 0))) {
+        if (remote && (remote.videos.length || remote.playlists.length)) {
           setVideos(remote.videos);
           setPlaylists(remote.playlists);
-          mirrorToLocalStorage(remote.videos, remote.playlists);
           return;
         }
         const mirror = readMirrorFromLocalStorage();
-        if (mirror && ((mirror.videos?.length ?? 0) || (mirror.playlists?.length ?? 0))) {
+        if (mirror) {
           setVideos(mirror.videos);
           setPlaylists(mirror.playlists);
         }
       } catch (e) {
         console.warn('[restore] failed:', e);
-        const mirror = readMirrorFromLocalStorage();
-        if (mirror && ((mirror.videos?.length ?? 0) || (mirror.playlists?.length ?? 0))) {
-          setVideos(mirror.videos);
-          setPlaylists(mirror.playlists);
-        }
       }
     })();
     // run once
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // -------- Persist on change (debounced): Mirror + Remote --------
-  useEffect(() => {
-    const t = setTimeout(() => {
-      try {
-        mirrorToLocalStorage(videos, playlists); // local safety
-        saveRemote(videos, playlists).catch(() => {}); // best-effort remote
-      } catch (e) {
-        console.warn('[save] failed:', e);
-      }
-    }, 300);
-    return () => clearTimeout(t);
-  }, [videos, playlists]);
-
-  // -------- Handlers --------
   const handleVideoAdd = (video: Video) => {
     setVideos(prev => (prev.some(v => v.id === video.id) ? prev : [...prev, video]));
   };
@@ -80,6 +57,15 @@ function App() {
     setIsPlayerOpen(true);
   };
 
+  const handlePlaylistPlay = (playlist: Playlist) => {
+    if (playlist.videos.length > 0) {
+      setCurrentPlaylist(playlist);
+      setCurrentIndex(0);
+      setCurrentVideo(playlist.videos[0]);
+      setIsPlayerOpen(true);
+    }
+  };
+
   const handleVideoSelect = (video: Video) => {
     setSelectedVideos(prev => (prev.some(v => v.id === video.id) ? prev : [...prev, video]));
   };
@@ -89,121 +75,136 @@ function App() {
   };
 
   const handleVideoDelete = (video: Video) => {
-    // Remove from library
+    // Remove from videos collection
     setVideos(prev => prev.filter(v => v.id !== video.id));
-    // Remove from selection
-    setSelectedVideos(prev => prev.filter(v => v.id !== video.id));
-    // Remove from all playlists
-    setPlaylists(prev => prev.map(p => ({ ...p, videos: p.videos.filter(v => v.id !== video.id) })));
 
-    // If currently playing this video, clear/advance
+    // Remove from selected videos
+    setSelectedVideos(prev => prev.filter(v => v.id !== video.id));
+
+    // Remove from all playlists
+    setPlaylists(prev =>
+      prev.map(p => ({ ...p, videos: p.videos.filter(v => v.id !== video.id) })),
+    );
+
+    // Close player if this video is currently playing
     if (currentVideo?.id === video.id) {
-      if (currentPlaylist) {
-        const remaining = currentPlaylist.videos.filter(v => v.id !== video.id);
-        if (remaining.length) {
-          setCurrentPlaylist({ ...currentPlaylist, videos: remaining });
-          setCurrentIndex(0);
-          setCurrentVideo(remaining[0]);
-        } else {
-          setCurrentPlaylist(null);
-          setCurrentIndex(null);
-          setCurrentVideo(null);
-          setIsPlayerOpen(false);
-        }
-      } else {
-        setCurrentVideo(null);
-        setCurrentIndex(null);
-        setIsPlayerOpen(false);
-      }
+      setIsPlayerOpen(false);
+      setCurrentVideo(null);
+      setCurrentPlaylist(null);
+      setCurrentIndex(null);
     }
   };
 
+  const handleClearSelection = () => {
+    setSelectedVideos([]);
+  };
+
+  // Your existing create handler
   const handleCreatePlaylist = (name: string, description: string, vids: Video[]) => {
     const newPlaylist: Playlist = {
-      id: (globalThis.crypto?.randomUUID?.() ?? String(Date.now())),
-      name: name.trim(),
-      description: description.trim(),
+      id: Date.now().toString(),
+      name,
+      description,
       videos: [...vids],
       createdAt: new Date().toISOString(),
       thumbnail: vids[0]?.thumbnail,
     };
     setPlaylists(prev => [...prev, newPlaylist]);
-    setSelectedVideos([]);
   };
 
+  // Reorder handler (keeps currently playing state in sync)
   const handleReorderPlaylist = (id: string, newOrder: Video[]) => {
+    // Update the playlists array
     setPlaylists(prev => prev.map(p => (p.id === id ? { ...p, videos: newOrder } : p)));
 
-    // If the playlist is open in the player, keep it in sync
+    // If the currently viewed/playing playlist is the same, sync it too
+    setCurrentPlaylist(prev => (prev && prev.id === id ? { ...prev, videos: newOrder } : prev));
+
+    // Keep currentIndex aligned with the same currentVideo (if any)
     if (currentPlaylist?.id === id) {
-      setCurrentPlaylist(prev => (prev ? { ...prev, videos: newOrder } : prev));
       if (currentVideo) {
         const idx = newOrder.findIndex(v => v.id === currentVideo.id);
-        if (idx >= 0) {
+        if (idx !== -1) {
           setCurrentIndex(idx);
-        } else if (newOrder.length) {
+        } else {
+          // Current video no longer in list; move to first item (or clear)
+          setCurrentIndex(newOrder.length ? 0 : null);
+          setCurrentVideo(newOrder[0] ?? null);
+        }
+      } else {
+        // No current video; if list has items, set to first
+        if (newOrder.length) {
           setCurrentIndex(0);
           setCurrentVideo(newOrder[0]);
         } else {
           setCurrentIndex(null);
-          setCurrentVideo(null);
         }
-      } else if (newOrder.length) {
-        setCurrentIndex(0);
-        setCurrentVideo(newOrder[0]);
-      } else {
-        setCurrentIndex(null);
       }
     }
   };
 
-  const handleDeletePlaylist = async (id: string) => {
-    // Try server delete, but update UI regardless
-    try {
-      const res = await fetch(`/api/playlists/${id}`, { method: 'DELETE' });
-      if (!res.ok) console.error('[Delete playlist] server returned', res.status);
-    } catch (e) {
-      console.error('[Delete playlist] network error:', e);
+const handleDeletePlaylist = async (id: string) => {
+  try {
+    const res = await fetch(`/api/playlists/${id}`, { method: 'DELETE' });
+    if (!res.ok) {
+      const msg = await res.text();
+      console.error('[Delete playlist] server error:', msg);
+      alert('Failed to delete playlist on server.');
+      return;
     }
+  } catch (e) {
+    console.error('[Delete playlist] network error:', e);
+    alert('Failed to reach server.');
+    return;
+  }
 
-    setPlaylists(prev => prev.filter(p => p.id !== id));
+  setPlaylists(prev => prev.filter(p => p.id !== id));
 
-    if (currentPlaylist?.id === id) {
-      setCurrentPlaylist(null);
-      setCurrentIndex(null);
-      setCurrentVideo(null);
-      setIsPlayerOpen(false);
-    }
-  };
+  if (currentPlaylist?.id === id) {
+    setIsPlayerOpen(false);
+    setCurrentPlaylist(null);
+    setCurrentVideo(null);
+    setCurrentIndex(null);
+  }
+};
 
-  const handleClearSelection = () => setSelectedVideos([]);
-
-  const handlePlaylistPlay = (playlist: Playlist) => {
-    if (playlist.videos.length === 0) return;
-    setCurrentPlaylist(playlist);
-    setCurrentIndex(0);
-    setCurrentVideo(playlist.videos[0]);
-    setIsPlayerOpen(true);
-  };
 
   const handleNext = () => {
-    if (!currentPlaylist || currentIndex === null) return;
-    const next = (currentIndex + 1) % currentPlaylist.videos.length;
-    setCurrentIndex(next);
-    setCurrentVideo(currentPlaylist.videos[next]);
+    if (currentPlaylist != null && currentIndex != null) {
+      if (currentIndex < currentPlaylist.videos.length - 1) {
+        const next = currentIndex + 1;
+        setCurrentIndex(next);
+        setCurrentVideo(currentPlaylist.videos[next]);
+      }
+    }
   };
 
   const handlePrevious = () => {
-    if (!currentPlaylist || currentIndex === null) return;
-    const len = currentPlaylist.videos.length;
-    const prev = (currentIndex - 1 + len) % len;
-    setCurrentIndex(prev);
-    setCurrentVideo(currentPlaylist.videos[prev]);
+    if (currentPlaylist != null && currentIndex != null) {
+      if (currentIndex > 0) {
+        const prev = currentIndex - 1;
+        setCurrentIndex(prev);
+        setCurrentVideo(currentPlaylist.videos[prev]);
+      }
+    }
   };
 
-  // -------- UI --------
+  // On change: push REMOTE (D1) + mirror locally (debounced)
+  React.useEffect(() => {
+    const t = setTimeout(() => {
+      try {
+        saveRemote(videos, playlists);             // shared across devices
+        mirrorToLocalStorage(videos, playlists);   // local safety copy
+      } catch (e) {
+        console.warn('[save] failed:', e);
+      }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [videos, playlists]);
+
   return (
-    <div className="min-h-screen bg-gray-900 text-gray-100">
+    <div className="min-h-screen bg-gray-900">
+      {/* Header */}
       <header className="bg-gray-800 border-b border-gray-700">
         <div className="max-w-7xl mx-auto px-4 py-6">
           <div className="flex items-center gap-3">
@@ -215,7 +216,7 @@ function App() {
 
       <div className="max-w-7xl mx-auto px-4 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Left Column */}
+          {/* Left Column - Video Input and Playlists */}
           <div className="space-y-8">
             <VideoInput onVideoAdd={handleVideoAdd} />
             <PlaylistManager
@@ -230,7 +231,7 @@ function App() {
             />
           </div>
 
-          {/* Right Column */}
+          {/* Right Column - Video Collection */}
           <div className="lg:col-span-2">
             <VideoCollection
               videos={videos}
