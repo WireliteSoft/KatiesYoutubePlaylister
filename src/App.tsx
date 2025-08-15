@@ -251,6 +251,8 @@ const toggleSelectAll = React.useCallback(() => {
               onVideoSelect={handleVideoSelect}
               onVideoDeselect={handleVideoDeselect}
               onVideoDelete={handleVideoDelete}
+              onToggleSelectAll={toggleSelectAll}   // <- missing
+              allSelected={allSelected}             // <- missing
             />
           </div>
         </div>
