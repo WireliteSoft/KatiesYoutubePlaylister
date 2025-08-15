@@ -10,6 +10,9 @@ interface VideoCollectionProps {
   onVideoSelect: (video: Video) => void;
   onVideoDeselect: (video: Video) => void;
   onVideoDelete: (video: Video) => void;
+  // Keeping these in case they exist in your repo; they’re unused here.
+  onToggleSelectAll?: () => void;
+  allSelected?: boolean;
 }
 
 export const VideoCollection: React.FC<VideoCollectionProps> = ({
@@ -36,20 +39,23 @@ export const VideoCollection: React.FC<VideoCollectionProps> = ({
     else onVideoSelect(video);
   };
 
-  // ---- Select/Deselect ALL VISIBLE (after search/filter) ----
-  const totalVisible = filteredVideos.length;
-  const selectedVisible = filteredVideos.reduce((n, v) => n + (isSelected(v) ? 1 : 0), 0);
-  const allVisibleSelected = totalVisible > 0 && selectedVisible === totalVisible;
+  // ===== Select/Deselect ALL VIDEOS IN LIBRARY (not just visible) =====
+  const total = videos.length;
+  const selectedCount = selectedVideos.length;
+  const allLibrarySelected = total > 0 && selectedCount === total;
 
-  const handleToggleSelectAllVisible = () => {
-    if (allVisibleSelected) {
-      // Deselect all visible
-      filteredVideos.forEach(v => { if (isSelected(v)) onVideoDeselect(v); });
-    } else {
-      // Select all visible
-      filteredVideos.forEach(v => { if (!isSelected(v)) onVideoSelect(v); });
-    }
+  const handleSelectAllLibrary = () => {
+    // Select every video that isn't selected yet
+    videos.forEach(v => {
+      if (!isSelected(v)) onVideoSelect(v);
+    });
   };
+
+  const handleDeselectAllLibrary = () => {
+    // Deselect every currently selected video
+    selectedVideos.forEach(v => onVideoDeselect(v));
+  };
+  // ===================================================================
 
   return (
     <div className="space-y-6">
@@ -69,15 +75,15 @@ export const VideoCollection: React.FC<VideoCollectionProps> = ({
         </h2>
 
         <div className="flex items-center gap-2">
-          {/* Select/Deselect all currently visible videos */}
+          {/* Select/Deselect ALL (entire library) */}
           <button
             type="button"
-            onClick={handleToggleSelectAllVisible}
+            onClick={allLibrarySelected ? handleDeselectAllLibrary : handleSelectAllLibrary}
             className="px-3 py-2 rounded-md bg-gray-800 hover:bg-gray-700 border border-gray-600 text-sm"
-            aria-pressed={allVisibleSelected}
-            title={allVisibleSelected ? 'Deselect all visible' : 'Select all visible'}
+            aria-pressed={allLibrarySelected}
+            title={allLibrarySelected ? 'Deselect all videos' : 'Select all videos'}
           >
-            {allVisibleSelected ? 'Deselect All' : 'Select All'} ({selectedVisible}/{totalVisible})
+            {allLibrarySelected ? 'Deselect All' : 'Select All'} ({selectedCount}/{total})
           </button>
 
           <div className="relative">
