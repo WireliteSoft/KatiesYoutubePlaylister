@@ -29,7 +29,9 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   currentIndex,
 }) => {
   const playerRef = useRef<any>(null);
-  const iframeId = useMemo(() => (video ? `yt-embed-${video.id}` : 'yt-embed'), [video?.id]);
+
+  // ✅ stable iframe id for the whole component lifetime
+  const iframeIdRef = useRef<string>('yt-embed-fixed');
 
   const embedSrc = useMemo(() => {
     if (!video) return '';
@@ -61,20 +63,20 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     if (!isOpen || !video) return;
 
     const init = () => {
-      // If a player already exists, just load the new video
+      // If a player already exists, just load the new video (reuse same iframe)
       if (playerRef.current && typeof playerRef.current.loadVideoById === 'function') {
         try {
           playerRef.current.loadVideoById(video.id);
-        } catch {
-          /* ignore */
-        }
+          playerRef.current.playVideo?.();
+        } catch {/* ignore */}
         return;
       }
 
-      const el = document.getElementById(iframeId) as HTMLIFrameElement | null;
-      if (!el || !(window as any).YT || !(window as any).YT.Player) return;
+      const el = document.getElementById(iframeIdRef.current) as HTMLIFrameElement | null;
+      if (!el || !window.YT || !window.YT.Player) return;
 
-      playerRef.current = new (window as any).YT.Player(iframeId, {
+      playerRef.current = new window.YT.Player(iframeIdRef.current, {
+        // If you prefer, you can also set: videoId: video.id,
         events: {
           onStateChange: (event: any) => {
             // 0 = ended
@@ -87,7 +89,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     };
 
     // API already loaded
-    if ((window as any).YT && (window as any).YT.Player) {
+    if (window.YT && window.YT.Player) {
       init();
       return;
     }
@@ -103,11 +105,20 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     return () => {
       window.onYouTubeIframeAPIReady = prev || (() => {});
     };
-  }, [isOpen, video?.id, iframeId, playlist, onNext]);
+  }, [isOpen, video?.id, playlist, onNext]);
+
+  // Optional: destroy on close to avoid zombies
+  useEffect(() => {
+    if (!isOpen) {
+      try { playerRef.current?.stopVideo?.(); } catch {}
+    }
+  }, [isOpen]);
 
   if (!isOpen || !video) return null;
 
-  const index = (typeof currentIndex === 'number' ? currentIndex : (playlist ? playlist.videos.findIndex(v => v.id === video.id) : -1));
+  const index = (typeof currentIndex === 'number'
+    ? currentIndex
+    : (playlist ? playlist.videos.findIndex(v => v.id === video.id) : -1));
   const hasPrevious = !!playlist && index > 0;
   const hasNext = !!playlist && index > -1 && index < (playlist?.videos.length ?? 0) - 1;
 
@@ -131,8 +142,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         {/* Player */}
         <div className="relative w-full aspect-video bg-black">
           <iframe
-            key={video.id}
-            id={iframeId}
+            /* ❌ remove key={video.id} to avoid remounts */
+            id={iframeIdRef.current}         {/* ✅ stable id */}
             src={embedSrc}
             title={video.title || 'YouTube video player'}
             className="absolute inset-0 w-full h-full"
