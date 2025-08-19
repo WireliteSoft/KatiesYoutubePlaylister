@@ -7,12 +7,7 @@ import { VideoCollection } from './components/VideoCollection';
 import { PlaylistManager } from './components/PlaylistManager';
 import { VideoPlayer } from './components/VideoPlayer';
 import { useLocalStorage } from './hooks/useLocalStorage';
-import {
-  loadRemote,
-  saveRemote,
-  mirrorToLocalStorage,
-  readMirrorFromLocalStorage,
-} from './utils/snapshot';
+import { loadRemote, saveRemote, mirrorToLocalStorage, readMirrorFromLocalStorage, upsertPlaylistMapping } from './utils/snapshot';
 
 function App() {
   const [videos, setVideos] = useLocalStorage<Video[]>('videos', []);
@@ -177,6 +172,39 @@ function App() {
       setCurrentIndex(null);
     }
   };
+
+
+// Append the current selection to an existing playlist (deduped), then persist to DB
+const handleAddSelectedToPlaylist = async (playlistId: string) => {
+  if (!selectedVideos.length) return;
+
+  // find current snapshot of the target playlist
+  const target = playlists.find(p => p.id === playlistId);
+  if (!target) return;
+
+  // dedupe: ignore any already in the playlist
+  const existing = new Set(target.videos.map(v => v.id));
+  const toAppend = selectedVideos.filter(v => !existing.has(v.id));
+  if (toAppend.length === 0) return;
+
+  // new list for that playlist
+  const newVideos = [...target.videos, ...toAppend];
+
+  // 1) optimistic local update (UI updates immediately)
+  setPlaylists(prev => prev.map(p => (p.id === playlistId ? { ...p, videos: newVideos } : p)));
+
+  // 2) persist to DB: merge mode replaces ONLY this playlist's mapping
+  try {
+    await upsertPlaylistMapping(playlistId, newVideos.map(v => v.id));
+  } catch (e) {
+    console.error('[append -> persist] failed:', e);
+    alert('Failed to save playlist changes to the server.');
+    // optional: revert UI on failure
+    // setPlaylists(prev => prev.map(p => (p.id === playlistId ? target : p)));
+  }
+};
+
+  
 
   // ===== Persist changes (debounced) =====
   useEffect(() => {
