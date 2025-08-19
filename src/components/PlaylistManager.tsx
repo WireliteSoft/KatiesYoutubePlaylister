@@ -13,22 +13,20 @@ interface PlaylistManagerProps {
   onPlayPlaylist: (playlist: Playlist) => void;
   onClearSelection: () => void;
 
-  // Currently unused here, but kept for API parity with App
+  // Kept in the interface for API parity, but not used here
   onReorderPlaylist: (playlistId: string, newOrder: Video[]) => void;
 
-  // NEW: append current selection to an existing playlist
+  // Append current selection to an existing playlist
   onAddSelectedToPlaylist: (playlistId: string) => void;
 }
 
 export const PlaylistManager: React.FC<PlaylistManagerProps> = ({
   playlists,
-  videos,
   selectedVideos,
   onCreatePlaylist,
   onDeletePlaylist,
   onPlayPlaylist,
   onClearSelection,
-  onReorderPlaylist, // eslint-disable-line @typescript-eslint/no-unused-vars
   onAddSelectedToPlaylist,
 }) => {
   const [name, setName] = React.useState('');
@@ -46,10 +44,8 @@ export const PlaylistManager: React.FC<PlaylistManagerProps> = ({
 
   const selectedCount = selectedVideos.length;
 
-  const sortedOldestFirst = React.useMemo(
-    () => playlists.slice().sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0)),
-    [playlists]
-  );
+  // No createdAt/updatedAt dependency -> avoids TS errors on missing fields
+  const orderedPlaylists = React.useMemo(() => playlists.slice(), [playlists]);
 
   return (
     <div className="space-y-6">
@@ -99,11 +95,11 @@ export const PlaylistManager: React.FC<PlaylistManagerProps> = ({
         </div>
       </div>
 
-      {/* Add Selection to Existing Playlist (Oldest first) */}
+      {/* Add Selection to Existing Playlist */}
       <div className="p-4 rounded-lg bg-gray-800 border border-gray-700">
         <div className="mb-3 text-sm text-gray-300">
           Add <span className="font-semibold">{selectedCount}</span> selected video
-          {selectedCount === 1 ? '' : 's'} to an existing playlist (oldest first):
+          {selectedCount === 1 ? '' : 's'} to an existing playlist:
         </div>
         <div className="flex items-center gap-2">
           <select
@@ -114,7 +110,7 @@ export const PlaylistManager: React.FC<PlaylistManagerProps> = ({
             <option value="" disabled>
               Select a playlist…
             </option>
-            {sortedOldestFirst.map((p) => (
+            {orderedPlaylists.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name} ({p.videos.length})
               </option>
