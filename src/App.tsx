@@ -7,7 +7,7 @@ import { VideoCollection } from './components/VideoCollection';
 import { PlaylistManager } from './components/PlaylistManager';
 import { VideoPlayer } from './components/VideoPlayer';
 import { useLocalStorage } from './hooks/useLocalStorage';
-import { loadRemote, saveRemote, mirrorToLocalStorage, readMirrorFromLocalStorage, upsertPlaylistMapping } from './utils/snapshot';
+import { loadRemote, saveRemote, mirrorToLocalStorage, readMirrorFromLocalStorage, upsertPlaylistMapping, } from './utils/snapshot';
 
 function App() {
   const [videos, setVideos] = useLocalStorage<Video[]>('videos', []);
