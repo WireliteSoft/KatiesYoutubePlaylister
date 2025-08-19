@@ -65,6 +65,28 @@ function App() {
     setIsPlayerOpen(true);
   };
 
+  // Append selectedVideos to an existing playlist (no dupes, preserve order)
+const handleAddSelectedToPlaylist = (playlistId: string) => {
+  if (!selectedVideos.length) return;
+
+  setPlaylists(prev =>
+    prev.map(p => {
+      if (p.id !== playlistId) return p;
+
+      const existingIds = new Set(p.videos.map(v => v.id));
+      const toAppend = selectedVideos.filter(v => !existingIds.has(v.id));
+      if (toAppend.length === 0) return p;
+
+      return {
+        ...p,
+        videos: [...p.videos, ...toAppend],
+        updatedAt: Date.now(),
+      };
+    })
+  );
+};
+
+
   // If UI allows “play” on a single video, we still keep playlist-only by
   // creating a 1-item temporary playlist. (Not a separate single-play mode.)
   const handleVideoPlay = (video: Video) => {
