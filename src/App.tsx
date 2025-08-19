@@ -238,6 +238,7 @@ const handleAddSelectedToPlaylist = (playlistId: string) => {
               onPlayPlaylist={handlePlaylistPlay}
               onClearSelection={handleClearSelection}
               onReorderPlaylist={handleReorderPlaylist}
+              onAddSelectedToPlaylist={handleAddSelectedToPlaylist}
             />
           </div>
 
