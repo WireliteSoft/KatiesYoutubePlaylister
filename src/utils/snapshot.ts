@@ -21,6 +21,30 @@ export async function loadRemote(): Promise<BackupPayload | null> {
   }
 }
 
+
+
+// Append (really: replace mapping with new full list) for one playlist via /api/library merge
+export async function upsertPlaylistMapping(
+  playlistId: string,
+  videoIds: (string | { id: string })[],
+): Promise<void> {
+  const ids = videoIds.map(v => (typeof v === 'string' ? v : v.id));
+
+  await fetch('/api/library', {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      version: 1,
+      mode: 'merge',
+      playlists: [{ id: playlistId, videos: ids }],
+    }),
+  });
+}
+
+
+
+
+
 export async function saveRemote(videos: Video[], playlists: Playlist[]) {
   try {
     await fetch(REMOTE_URL, {
