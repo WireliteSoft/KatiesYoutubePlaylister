@@ -29,17 +29,80 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   currentIndex,
 }) => {
   const playerRef = useRef<any>(null);
-
-  // Stable container id for the whole component lifetime
-  const iframeIdRef = useRef<string>('yt-embed-fixed');
-
-  // ---- Load YouTube Iframe API once ----
+  const iframeIdRef = useRef<string>('yt-embed-fixed'); // stable
   const scriptAddedRef = useRef(false);
-  useEffect(() => {
-    if (window.YT && window.YT.Player) return;
-    if (scriptAddedRef.current) return;
 
+  // track currently-rendered video id so we can detect if parent advanced
+  const lastVideoIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    lastVideoIdRef.current = video?.id ?? null;
+  }, [video?.id]);
+
+  // simple guard against spamming advance()
+  const advancingRef = useRef(false);
+
+  // fallback timer that checks if the video is basically finished
+  const pollTimerRef = useRef<number | null>(null);
+  const startPoll = () => {
+    stopPoll();
+    if (!playerRef.current?.getDuration) return;
+    pollTimerRef.current = window.setInterval(() => {
+      try {
+        const dur = playerRef.current.getDuration?.() ?? 0;
+        const t = playerRef.current.getCurrentTime?.() ?? 0;
+        if (dur > 0 && dur - t <= 0.4) {
+          advance();
+        }
+      } catch {}
+    }, 1000);
+  };
+  const stopPoll = () => {
+    if (pollTimerRef.current) {
+      clearInterval(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
+  };
+
+  const advance = () => {
+    if (advancingRef.current) return;
+    advancingRef.current = true;
+
+    const before = lastVideoIdRef.current;
+
+    // 1) Ask parent to advance
+    try { onNext(); } catch {}
+
+    // 2) If parent didn’t swap the video prop shortly, do it locally
+    window.setTimeout(() => {
+      if (lastVideoIdRef.current === before && playlist && playerRef.current?.loadVideoById) {
+        const idx =
+          typeof currentIndex === 'number'
+            ? currentIndex
+            : playlist.videos.findIndex(v => v.id === before);
+        const next = (idx >= 0 && idx + 1 < playlist.videos.length)
+          ? playlist.videos[idx + 1]
+          : null;
+
+        if (next) {
+          try {
+            playerRef.current.loadVideoById(next.id);
+            playerRef.current.playVideo?.();
+            lastVideoIdRef.current = next.id;
+          } catch (e) {
+            console.warn('Local advance loadVideoById failed:', e);
+          }
+        }
+      }
+      advancingRef.current = false;
+    }, 500);
+  };
+
+  // Load YouTube Iframe API once
+  useEffect(() => {
+    if (window.YT?.Player) return;
+    if (scriptAddedRef.current) return;
     scriptAddedRef.current = true;
+
     const scriptId = 'youtube-iframe-api';
     if (!document.getElementById(scriptId)) {
       const tag = document.createElement('script');
@@ -49,23 +112,23 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     }
   }, []);
 
-  // ---- Initialize player once; load new videos via API (do NOT change iframe src) ----
+  // Initialize player once; on new videos, use loadVideoById
   useEffect(() => {
     if (!isOpen || !video) return;
 
     const init = () => {
-      // If a player already exists, just load the new video (reuse same iframe)
-      if (playerRef.current && typeof playerRef.current.loadVideoById === 'function') {
+      if (playerRef.current?.loadVideoById) {
         try {
           playerRef.current.loadVideoById(video.id);
           playerRef.current.playVideo?.();
+          startPoll();
         } catch (e) {
           console.warn('YouTube loadVideoById failed:', e);
         }
         return;
       }
 
-      if (!window.YT || !window.YT.Player) return;
+      if (!window.YT?.Player) return;
 
       playerRef.current = new window.YT.Player(iframeIdRef.current, {
         videoId: video.id,
@@ -77,49 +140,63 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
           origin: window.location.origin,
         },
         events: {
-          onReady: (e: any) => e?.target?.playVideo?.(),
+          onReady: (e: any) => {
+            try { e?.target?.playVideo?.(); } catch {}
+            startPoll();
+          },
           onStateChange: (event: any) => {
-            const ENDED = window.YT?.PlayerState?.ENDED ?? 0;
-            if (event?.data === ENDED && playlist) {
-              onNext();
+            const YTConst = window.YT?.PlayerState;
+            const state = event?.data;
+
+            if (YTConst && state === YTConst.ENDED) {
+              advance();
+            } else if (YTConst && state === YTConst.PLAYING) {
+              startPoll();
+            } else if (YTConst && (state === YTConst.PAUSED || state === YTConst.BUFFERING)) {
+              // keep polling; no-op
             }
+          },
+          onError: (_e: any) => {
+            // Skip broken/unavailable videos
+            advance();
           },
         },
       });
     };
 
-    // API already loaded
-    if (window.YT && window.YT.Player) {
+    if (window.YT?.Player) {
       init();
-      return;
+    } else {
+      const prev = window.onYouTubeIframeAPIReady;
+      window.onYouTubeIframeAPIReady = () => {
+        try { prev && prev(); } catch {}
+        init();
+      };
+      return () => {
+        window.onYouTubeIframeAPIReady = prev || (() => {});
+      };
     }
+  }, [isOpen, video?.id, playlist, onNext, currentIndex]);
 
-    // Attach a ready callback ONE time per mount of this effect
-    const prev = window.onYouTubeIframeAPIReady;
-    window.onYouTubeIframeAPIReady = () => {
-      prev && prev();
-      init();
-    };
-
-    // Cleanup the ready callback on effect cleanup
-    return () => {
-      window.onYouTubeIframeAPIReady = prev || (() => {});
-    };
-  }, [isOpen, video?.id, playlist, onNext]);
-
-  // Optional: destroy on close to avoid zombies
+  // Destroy on close
   useEffect(() => {
-    if (!isOpen && playerRef.current?.destroy) {
-      try { playerRef.current.destroy(); } catch {}
+    if (!isOpen) {
+      stopPoll();
+      if (playerRef.current?.destroy) {
+        try { playerRef.current.destroy(); } catch {}
+      }
       playerRef.current = null;
+      advancingRef.current = false;
     }
   }, [isOpen]);
 
   if (!isOpen || !video) return null;
 
-  const index = (typeof currentIndex === 'number'
-    ? currentIndex
-    : (playlist ? playlist.videos.findIndex(v => v.id === video.id) : -1));
+  const index =
+    typeof currentIndex === 'number'
+      ? currentIndex
+      : (playlist ? playlist.videos.findIndex(v => v.id === video.id) : -1);
+
   const hasPrevious = !!playlist && index > 0;
   const hasNext = !!playlist && index > -1 && index < (playlist?.videos.length ?? 0) - 1;
 
@@ -140,12 +217,9 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
           </button>
         </div>
 
-        {/* Player container: IMPORTANT — no <iframe src>. YT API owns this element. */}
+        {/* Player container (YT owns this element) */}
         <div className="relative w-full aspect-video bg-black">
-          <div
-            id={iframeIdRef.current}
-            className="absolute inset-0 w-full h-full"
-          />
+          <div id={iframeIdRef.current} className="absolute inset-0 w-full h-full" />
         </div>
 
         {playlist && (
