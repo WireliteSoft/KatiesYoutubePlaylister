@@ -30,35 +30,26 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 }) => {
   const playerRef = useRef<any>(null);
 
-  // stable iframe id for the whole component lifetime
+  // Stable container id for the whole component lifetime
   const iframeIdRef = useRef<string>('yt-embed-fixed');
 
-  const embedSrc = useMemo(() => {
-    if (!video) return '';
-    const base = `https://www.youtube.com/embed/${encodeURIComponent(video.id)}`;
-    const params = new URLSearchParams({
-      autoplay: '1',
-      rel: '0',
-      modestbranding: '1',
-      playsinline: '1',
-      enablejsapi: '1',
-      origin: window.location.origin,
-    });
-    return `${base}?${params.toString()}`;
-  }, [video?.id]);
-
-  // Load YouTube Iframe API once
+  // ---- Load YouTube Iframe API once ----
+  const scriptAddedRef = useRef(false);
   useEffect(() => {
     if (window.YT && window.YT.Player) return;
+    if (scriptAddedRef.current) return;
+
+    scriptAddedRef.current = true;
     const scriptId = 'youtube-iframe-api';
-    if (document.getElementById(scriptId)) return;
-    const tag = document.createElement('script');
-    tag.id = scriptId;
-    tag.src = 'https://www.youtube.com/iframe_api';
-    document.body.appendChild(tag);
+    if (!document.getElementById(scriptId)) {
+      const tag = document.createElement('script');
+      tag.id = scriptId;
+      tag.src = 'https://www.youtube.com/iframe_api';
+      document.body.appendChild(tag);
+    }
   }, []);
 
-  // Initialize / update player when API and video are ready
+  // ---- Initialize player once; load new videos via API (do NOT change iframe src) ----
   useEffect(() => {
     if (!isOpen || !video) return;
 
@@ -68,19 +59,28 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         try {
           playerRef.current.loadVideoById(video.id);
           playerRef.current.playVideo?.();
-        } catch {/* ignore */}
+        } catch (e) {
+          console.warn('YouTube loadVideoById failed:', e);
+        }
         return;
       }
 
-      const el = document.getElementById(iframeIdRef.current) as HTMLIFrameElement | null;
-      if (!el || !window.YT || !window.YT.Player) return;
+      if (!window.YT || !window.YT.Player) return;
 
       playerRef.current = new window.YT.Player(iframeIdRef.current, {
-        // If you prefer, you can also set: videoId: video.id,
+        videoId: video.id,
+        playerVars: {
+          autoplay: 1,
+          rel: 0,
+          modestbranding: 1,
+          playsinline: 1,
+          origin: window.location.origin,
+        },
         events: {
+          onReady: (e: any) => e?.target?.playVideo?.(),
           onStateChange: (event: any) => {
-            // 0 = ended
-            if (event?.data === 0 && playlist) {
+            const ENDED = window.YT?.PlayerState?.ENDED ?? 0;
+            if (event?.data === ENDED && playlist) {
               onNext();
             }
           },
@@ -94,14 +94,14 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       return;
     }
 
-    // Attach ready callback
+    // Attach a ready callback ONE time per mount of this effect
     const prev = window.onYouTubeIframeAPIReady;
     window.onYouTubeIframeAPIReady = () => {
       prev && prev();
       init();
     };
 
-    // Cleanup callback on unmount
+    // Cleanup the ready callback on effect cleanup
     return () => {
       window.onYouTubeIframeAPIReady = prev || (() => {});
     };
@@ -109,8 +109,9 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
   // Optional: destroy on close to avoid zombies
   useEffect(() => {
-    if (!isOpen) {
-      try { playerRef.current?.stopVideo?.(); } catch {}
+    if (!isOpen && playerRef.current?.destroy) {
+      try { playerRef.current.destroy(); } catch {}
+      playerRef.current = null;
     }
   }, [isOpen]);
 
@@ -139,18 +140,12 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
           </button>
         </div>
 
+        {/* Player container: IMPORTANT — no <iframe src>. YT API owns this element. */}
         <div className="relative w-full aspect-video bg-black">
-          <iframe
-            /*  remove key={video.id} to avoid remounts */
-            id={iframeIdRef.current}  
-            src={embedSrc}
-            title={video.title || 'YouTube video player'}
+          <div
+            id={iframeIdRef.current}
             className="absolute inset-0 w-full h-full"
-            frameBorder="0"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-            allowFullScreen
-            referrerPolicy="strict-origin-when-cross-origin"
-          ></iframe>
+          />
         </div>
 
         {playlist && (
