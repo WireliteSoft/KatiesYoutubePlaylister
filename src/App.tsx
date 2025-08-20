@@ -1,4 +1,3 @@
-// src/App.tsx
 import React, { useState, useEffect } from 'react';
 import { Youtube } from 'lucide-react';
 import { Video, Playlist } from './types';
