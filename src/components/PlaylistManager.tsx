@@ -12,7 +12,6 @@ interface PlaylistManagerProps {
   onPlayPlaylist: (playlist: Playlist) => void;
   onClearSelection: () => void;
   onReorderPlaylist: (id: string, newOrder: Video[]) => void;
-  onAddSelectedToPlaylist, // ← include it here
 }
 
 export const PlaylistManager: React.FC<PlaylistManagerProps> = ({
