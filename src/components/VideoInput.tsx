@@ -64,32 +64,31 @@ export const VideoInput: React.FC<VideoInputProps> = ({ onVideoAdd }) => {
 
     if (!bulkUrls.trim()) return;
 
-    // Extract URLs from the text (split by newlines, spaces, commas)
+    // Extract URLs from the text (split by newlines, spaces, commas) — maintain input order
     const urls = bulkUrls
       .split(/[\n,\s]+/)
-      .map(url => url.trim())
-      .filter(url => url.length > 0);
+      .map(u => u.trim())
+      .filter(u => u.length > 0);
 
     if (urls.length === 0) {
       setError('No valid URLs found');
       return;
     }
 
-    
-    // Build a quick lookup for existing video IDs once (so we don't depend on async state writes)
+    // Build a quick lookup for existing IDs once (don’t rely on async state writes)
     const existingIds = new Set<string>(
       (() => {
         try {
           const arr = JSON.parse(localStorage.getItem('videos') || '[]');
-          return Array.isArray(arr) ? arr.map((v:any) => v.id) : [];
+          return Array.isArray(arr) ? arr.map((v: any) => v.id as string) : [];
         } catch {
           return [];
         }
       })()
     );
-    const newlyAddedIds = new Set<string>(); // track duplicates within this paste
+    const newlyAddedIds = new Set<string>(); // avoid dupes within this paste
 
-const validUrls = urls.filter(isValidYouTubeUrl);
+    const validUrls = urls.filter(isValidYouTubeUrl);
     if (validUrls.length === 0) {
       setError('No valid YouTube URLs found');
       return;
@@ -102,53 +101,53 @@ const validUrls = urls.filter(isValidYouTubeUrl);
     let failedCount = 0;
     let duplicateCount = 0;
 
-    // Process URLs in batches to avoid overwhelming the browser
+    // Process URLs in small batches; collect first, then add in order (preserves top→bottom)
     const batchSize = 3;
     for (let i = 0; i < validUrls.length; i += batchSize) {
       const batch = validUrls.slice(i, i + batchSize);
-      
-      await Promise.allSettled(
+
+      const results = await Promise.allSettled(
         batch.map(async (url) => {
-          try {
-            const videoId = extractVideoId(url);
-            if (!videoId) {
-              failedCount++;
-              return;
-            }
+          const videoId = extractVideoId(url);
+          if (!videoId) throw new Error('invalid id');
 
-            // Check if video already exists
-            // We'll let the onVideoAdd function handle duplicate checking
-            const videoDetails = await getVideoDetails(videoId);
-            
-            const video: Video = {
-              id: videoId,
-              url: url,
-              title: videoDetails.title || `Video ${videoId}`,
-              thumbnail: videoDetails.thumbnail || getVideoThumbnail(videoId),
-              duration: videoDetails.duration || 'Unknown',
-              channelTitle: videoDetails.channelTitle || 'Unknown Channel',
-              publishedAt: videoDetails.publishedAt || new Date().toISOString().split('T')[0],
-            };
+          const videoDetails = await getVideoDetails(videoId);
 
-            // Check if video was actually added (not a duplicate)
-            const beforeCount = JSON.parse(localStorage.getItem('videos') || '[]').length;
-            onVideoAdd(video);
-            const afterCount = JSON.parse(localStorage.getItem('videos') || '[]').length;
-            
-            if (afterCount > beforeCount) {
-              successCount++;
-            } else {
-              duplicateCount++;
-              return;
-            }
-          } catch (err) {
-            failedCount++;
-          }
+          const video: Video = {
+            id: videoId,
+            url,
+            title: videoDetails.title || `Video ${videoId}`,
+            thumbnail: videoDetails.thumbnail || getVideoThumbnail(videoId),
+            duration: videoDetails.duration || 'Unknown',
+            channelTitle: videoDetails.channelTitle || 'Unknown Channel',
+            publishedAt: videoDetails.publishedAt || new Date().toISOString().split('T')[0],
+          };
+
+          return video; // do NOT call onVideoAdd here
         })
       );
 
-      setBulkProgress({ current: Math.min(i + batchSize, validUrls.length), total: validUrls.length });
-      
+      // Add in the same order as input, with clear duplicate accounting
+      for (const r of results) {
+        if (r.status === 'fulfilled' && r.value) {
+          const v = r.value as Video;
+          if (existingIds.has(v.id) || newlyAddedIds.has(v.id)) {
+            duplicateCount++;
+          } else {
+            onVideoAdd(v);
+            newlyAddedIds.add(v.id);
+            successCount++;
+          }
+        } else {
+          failedCount++;
+        }
+
+        setBulkProgress((p) => ({
+          current: Math.min(p.current + 1, validUrls.length),
+          total: p.total,
+        }));
+      }
+
       // Small delay between batches to prevent rate limiting
       if (i + batchSize < validUrls.length) {
         await new Promise(resolve => setTimeout(resolve, 500));
