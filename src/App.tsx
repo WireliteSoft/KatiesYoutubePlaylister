@@ -53,7 +53,7 @@ function App() {
 
   // ===== Core handlers =====
   const handleVideoAdd = (video: Video) => {
-    setVideos(prev => (prev.some(v => v.id === video.id) ? prev : [...prev, video]));
+    setVideos(prev => (prev.some(v => v.id === video.id) ? prev : [video, ...prev]));
   };
 
   // Start playing a playlist (always playlist mode)
