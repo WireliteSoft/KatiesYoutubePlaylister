@@ -220,14 +220,14 @@ function App() {
 
           {/* Right Column - Video Collection */}
           <div className="lg:col-span-2">
-            <VideoCollection
-              videos={videos}
-              selectedVideos={selectedVideos}
-              onSelectVideo={handleVideoSelect}
-              onDeselectVideo={handleVideoDeselect}
-              onDeleteVideo={handleVideoDelete}
-              // If your UI has “play” on a single video, this still uses playlist-only
-              onPlayVideo={handleVideoPlay}
+<VideoCollection
+  videos={videos}
+  selectedVideos={selectedVideos}
+  onVideoSelect={handleVideoSelect}
+  onVideoDeselect={handleVideoDeselect}
+  onVideoDelete={handleVideoDelete}
+  onVideoPlay={handleVideoPlay}
+/>
             />
           </div>
         </div>
