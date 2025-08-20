@@ -227,7 +227,6 @@ function App() {
   onVideoDeselect={handleVideoDeselect}
   onVideoDelete={handleVideoDelete}
   onVideoPlay={handleVideoPlay}
-/>
             />
           </div>
         </div>
